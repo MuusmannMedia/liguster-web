@@ -1,0 +1,59 @@
+# Node dependencies
+node_modules/
+
+# Expo & build
+.expo/
+dist/
+web-build/
+.expo-shared/
+expo-env.d.ts
+
+# Typescript
+*.tsbuildinfo
+
+# Native / Android / iOS
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+*.store
+
+# Debug & log files
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# Metro bundler
+.metro-health-check*
+
+# macOS og IDE
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Systemfiler og caches
+*.pem
+*.crt
+*.swp
+
+# Local env
+.env*
+.env*.local
+
+# Coverage (tests)
+coverage/
+
+# Misc
+app-example
+
+# Brave-browser og Library caches (fjerner fejl som i din EAS build)
+Library/
+**/Library/
+Application\ Support/BraveSoftware/
+**/Application\ Support/BraveSoftware/

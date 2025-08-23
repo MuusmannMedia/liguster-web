@@ -1,0 +1,7 @@
+// lib/supabase.js
+import { createClient } from '@supabase/supabase-js';
+
+export const supabase = createClient(
+  'https://gizskyfynvyvhnaqcyax.supabase.co',        // <-- Din Supabase URL
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpenNreWZ5bnZ5dmhuYXFjeWF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjQ2ODUsImV4cCI6MjA2NjQ0MDY4NX0.4CpLeX9NFoZLEbfwXkGSTOFwH7drrG7SeEHW51Ic_Bg'                 // <-- Din public anon key fra Supabase
+);

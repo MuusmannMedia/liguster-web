@@ -1,0 +1,74 @@
+# Papirkurv og system junk
+.Trash
+.Trash/
+**/.Trash
+**/.Trash/
+.DS_Store
+**/.DS_Store
+
+# Brave/Chrome/Browser cache
+BraveSoftware/
+**/BraveSoftware/
+Google/Chrome/
+**/Google/Chrome/
+Cache/
+**/Cache/
+.cache/
+**/.cache/
+
+# Dropbox og sync-filer
+Dropbox/
+.dropbox/
+**/.dropbox/
+.dropbox.cache/
+**/.dropbox.cache/
+
+# Mac, IDE og OS-filer
+Library/
+**/Library/
+.idea/
+.vscode/
+**/.vscode/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs, history og build artefakter
+logs/
+**/logs/
+History/
+**/History/
+*.log
+*.store
+*.orig.*
+*.tsbuildinfo
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+coverage/
+**/coverage/
+
+# Expo/React Native
+node_modules/
+.expo/
+dist/
+web-build/
+.expo-shared/
+
+# Sikkerhed/certifikater
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Miljø/Secrets
+.env*
+.env*.local
+
+# Diverse (kan tilpasses)
+app-example
+
+# Ekskludér JSON hvis nødvendigt (men fjern denne hvis du har projektfiler i JSON!)
+# *.json
