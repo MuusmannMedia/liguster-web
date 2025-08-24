@@ -54,7 +54,9 @@
     "experiments": { "typedRoutes": true },
     "extra": {
       "router": {},
-      "eas": { "projectId": "510eb874-f1b3-4c29-9c58-4d19f0dd6272" }
+      "eas": { "projectId": "510eb874-f1b3-4c29-9c58-4d19f0dd6272" },
+      "supabaseUrl": "https://gizskyfynvyvhnaqcyax.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpenNreWZ5bnZ5dmhuYXFjeWF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjQ2ODUsImV4cCI6MjA2NjQ0MDY4NX0.4CpLeX9NFoZLEbfwXkGSTOFwH7drrG7SeEHW51Ic_Bg"
     }
   }
 }
