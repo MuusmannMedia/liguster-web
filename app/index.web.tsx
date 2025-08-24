@@ -1,9 +1,10 @@
 // app/index.web.tsx
-import { Link, router } from "expo-router";
+import { Link } from "expo-router";
 import React, { useEffect } from "react";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function WebLanding() {
+  // Beholdt console-logs til fejlsøgning (kan fjernes når alt virker)
   useEffect(() => {
     console.log("EXPO_PUBLIC_SUPABASE_URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
     console.log(
@@ -24,18 +25,9 @@ export default function WebLanding() {
               Liguster samler hverdagen i dit nabolag.
             </Text>
 
-            <View style={styles.heroActions}>
-              <TouchableOpacity
-                style={styles.cta}
-                onPress={() => router.push("/OpretBruger")}
-                accessibilityRole="button"
-              >
-                <Text style={styles.ctaText}>Kom i gang gratis</Text>
-              </TouchableOpacity>
-            </View>
-
+            {/* Ingen signup-CTA her længere */}
             <Text style={styles.heroNote}>
-              Ingen betalingskort – det tager under 1 minut.
+              Webudgaven er under udvikling. Har du allerede en konto, kan du logge ind nedenfor.
             </Text>
           </View>
 
@@ -67,20 +59,12 @@ export default function WebLanding() {
         </View>
       </View>
 
-      {/* Bottom CTA */}
+      {/* Bottom CTA – kun login-link */}
       <View style={styles.bottomCta}>
-        <Text style={styles.bottomCtaTitle}>Klar til at prøve Liguster?</Text>
+        <Text style={styles.bottomCtaTitle}>Klar til at logge ind?</Text>
         <View style={styles.bottomCtaRow}>
-          <TouchableOpacity
-            style={styles.cta}
-            onPress={() => router.push("/OpretBruger")}
-            accessibilityRole="button"
-          >
-            <Text style={styles.ctaText}>Opret bruger</Text>
-          </TouchableOpacity>
-
           <Link href="/LoginScreen" style={styles.bottomLink} accessibilityRole="link">
-            Har du allerede en konto? Log ind
+            Log ind
           </Link>
         </View>
       </View>
@@ -120,7 +104,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     maxWidth: 560,
   },
-  heroActions: { flexDirection: "row", gap: 12, marginTop: 8 },
+  // cta/ctaText kan blive liggende selvom de ikke bruges – ufarligt
   cta: {
     backgroundColor: "#22c55e",
     paddingVertical: 12,
