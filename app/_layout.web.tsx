@@ -51,7 +51,6 @@ export default function WebLayout() {
         </TouchableOpacity>
 
         <View style={styles.navRight}>
-          {/* Vis ikke knapper før session er afklaret for at undgå flash */}
           {!isLoading && (
             <>
               {isAuthed ? (
@@ -66,12 +65,14 @@ export default function WebLayout() {
                 </>
               ) : (
                 <>
-                  <TouchableOpacity style={styles.loginBtn} onPress={() => router.push("/LoginScreen")} accessibilityRole="button">
+                  <TouchableOpacity
+                    style={styles.loginBtn}
+                    onPress={() => router.push("/LoginScreen")}
+                    accessibilityRole="button"
+                  >
                     <Text style={styles.loginBtnText}>Log ind</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.cta} onPress={() => router.push("/OpretBruger")} accessibilityRole="button">
-                    <Text style={styles.ctaText}>Opret bruger</Text>
-                  </TouchableOpacity>
+                  {/* Opret bruger fjernet her */}
                 </>
               )}
             </>
@@ -79,7 +80,7 @@ export default function WebLayout() {
         </View>
       </View>
 
-      {/* Side‑indhold */}
+      {/* Side-indhold */}
       <ScrollView contentContainerStyle={styles.content}>
         <Slot />
       </ScrollView>
@@ -100,7 +101,7 @@ export default function WebLayout() {
               ) : (
                 <>
                   <Link href="/LoginScreen" style={styles.footerLink}>Log ind</Link>
-                  <Link href="/OpretBruger" style={styles.footerLink}>Opret bruger</Link>
+                  {/* Opret bruger fjernet her */}
                 </>
               )}
             </>
@@ -150,8 +151,6 @@ const styles = StyleSheet.create({
   navLink: { color: "#cbd5e1", fontSize: 14 },
   loginBtn: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: "#334155", borderRadius: 10 },
   loginBtnText: { color: "#e2e8f0", fontWeight: "600" },
-  cta: { backgroundColor: "#22c55e", paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10 },
-  ctaText: { color: "#0b1220", fontWeight: "800" },
 
   content: { paddingBottom: 32 },
 
