@@ -29,30 +29,33 @@ export default function ProtectedLayout() {
 
     return () => {
       isMounted = false;
-      // Beskyt mod forskellige SDK-versioner
-      // @ts-ignore
+      // Beskyt mod forskellige SDK‑versioner
+      // @ts-ignore – nogle versioner bruger .subscription, andre ikke
       sub?.subscription?.unsubscribe?.();
+      // @ts-ignore
+      sub?.unsubscribe?.();
     };
   }, []);
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#22c55e" />
+        <ActivityIndicator size="large" />
         <Text style={styles.muted}>Loader…</Text>
       </View>
     );
   }
 
-  if (!authed) return null; // vi redirecter allerede, men undgå blink
+  if (!authed) return null; // vi redirecter allerede, men undgår blink
 
   return (
     <View style={styles.page}>
-      {/* Simpel topbar til de beskyttede sider */}
+      {/* Topbar til de beskyttede sider */}
       <View style={styles.navbar}>
         <TouchableOpacity onPress={() => router.push("/")}>
           <Text style={styles.brand}>Liguster</Text>
         </TouchableOpacity>
+
         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
           <TouchableOpacity onPress={() => router.push("/(protected)/Nabolag")}>
             <Text style={styles.link}>Opslag</Text>
