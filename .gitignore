@@ -42,8 +42,8 @@ Desktop.ini
 *.crt
 *.swp
 
-# Local env
-.env*
+# Local env (Supabase, API keys osv.)
+.env
 .env*.local
 
 # Coverage (tests)

@@ -1,11 +1,19 @@
 // app/index.web.tsx
 import { Link, router } from "expo-router";
-import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect } from "react";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function WebLanding() {
+  // Hjælpe‑log for at sikre at env vars er sat på Vercel
+  useEffect(() => {
+    // Disse linjer vises i browserens console (F12 → Console)
+    // Fjern dem senere når alt virker.
+    console.log("EXPO_PUBLIC_SUPABASE_URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
+    console.log("EXPO_PUBLIC_SUPABASE_ANON_KEY:", process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? "•sat•" : "•mangler•");
+  }, []);
+
   return (
-    <View style={{ backgroundColor: "#0f1623" }}>
+    <ScrollView contentContainerStyle={styles.page}>
       {/* Hero */}
       <View style={styles.hero}>
         <View style={styles.heroInner}>
@@ -17,10 +25,19 @@ export default function WebLanding() {
             </Text>
 
             <View style={styles.heroActions}>
-              <TouchableOpacity style={styles.cta} onPress={() => router.push("/OpretBruger")}>
+              <TouchableOpacity
+                style={styles.cta}
+                onPress={() => router.push("/OpretBruger")}
+                accessibilityRole="button"
+              >
                 <Text style={styles.ctaText}>Kom i gang gratis</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/Nabolag")}>
+
+              <TouchableOpacity
+                style={styles.secondaryCta}
+                onPress={() => router.push("/Nabolag")}
+                accessibilityRole="button"
+              >
                 <Text style={styles.secondaryCtaText}>Se opslag</Text>
               </TouchableOpacity>
             </View>
@@ -29,7 +46,7 @@ export default function WebLanding() {
           </View>
 
           <View style={styles.heroCol}>
-            {/* Læg evt. en illustration i assets/images/landing-illustration.png */}
+            {/* Brug gerne en egentlig illustration (fx landing-illustration.png) når du har en */}
             <Image
               source={require("../assets/images/Liguster-logo-NEG.png")}
               style={styles.heroImage}
@@ -57,17 +74,24 @@ export default function WebLanding() {
         </View>
       </View>
 
-      {/* Mini‑CTA sektion */}
+      {/* Bottom CTA */}
       <View style={styles.bottomCta}>
         <Text style={styles.bottomCtaTitle}>Klar til at prøve Liguster?</Text>
         <View style={styles.bottomCtaRow}>
-          <TouchableOpacity style={styles.cta} onPress={() => router.push("/OpretBruger")}>
+          <TouchableOpacity
+            style={styles.cta}
+            onPress={() => router.push("/OpretBruger")}
+            accessibilityRole="button"
+          >
             <Text style={styles.ctaText}>Opret bruger</Text>
           </TouchableOpacity>
-          <Link href="/LoginScreen" style={styles.bottomLink}>Har du allerede en konto? Log ind</Link>
+
+          <Link href="/LoginScreen" style={styles.bottomLink} accessibilityRole="link">
+            Har du allerede en konto? Log ind
+          </Link>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -81,6 +105,8 @@ function Feature({ title, text }: { title: string; text: string }) {
 }
 
 const styles = StyleSheet.create({
+  page: { backgroundColor: "#0f1623" },
+
   /* Hero */
   hero: { paddingVertical: 56, backgroundColor: "#0f1623" },
   heroInner: {
