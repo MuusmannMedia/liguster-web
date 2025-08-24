@@ -1,9 +1,8 @@
 // hooks/useNabolag.tsx
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { supabase } from '../utils/supabase';
 
 export type Post = {
@@ -19,68 +18,152 @@ export type Post = {
   kategori: string | null;
 };
 
-type UserLocation = {
-  latitude: number;
-  longitude: number;
-};
+type UserLocation = { latitude: number; longitude: number };
+
+// --------- helpers (platform-sikkert) ----------
+function isWeb() {
+  return Platform.OS === 'web';
+}
+
+function safeAlert(title: string, msg: string) {
+  if (isWeb()) console.warn(`${title}: ${msg}`);
+  else Alert.alert(title, msg);
+}
+
+// AsyncStorage på native, localStorage på web
+async function storageGet(key: string): Promise<string | null> {
+  if (isWeb()) {
+    try {
+      if (typeof window === 'undefined') return null; // SSR-sikkert
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+async function storageSet(key: string, value: string): Promise<void> {
+  if (isWeb()) {
+    try {
+      if (typeof window === 'undefined') return; // SSR-sikkert
+      window.localStorage.setItem(key, value);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
 
 function distanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const toRad = (val: number) => (val * Math.PI) / 180;
+  const toRad = (v: number) => (v * Math.PI) / 180;
   const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
+// ------------------------------------------------
+
 export const KATEGORIER = [
-  'Alle kategorier', 'Værktøj', 'Arbejde tilbydes', 'Affald', 'Mindre ting', 
-  'Større ting', 'Hjælp søges', 'Hjælp tilbydes', 'Byttes',
+  'Alle kategorier',
+  'Værktøj',
+  'Arbejde tilbydes',
+  'Affald',
+  'Mindre ting',
+  'Større ting',
+  'Hjælp søges',
+  'Hjælp tilbydes',
+  'Byttes',
 ];
 
 export function useNabolag() {
   const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [radius, setRadius] = useState(3);
   const [kategoriFilter, setKategoriFilter] = useState(KATEGORIER[0]);
 
+  // Hent bruger-id
   useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserId(data?.user?.id || null);
+    let mounted = true;
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) console.warn('Kunne ikke hente user:', error.message);
+      setUserId(data?.user?.id ?? null);
+    });
+    return () => {
+      mounted = false;
     };
-    getUser();
   }, []);
 
+  // Init radius + hent lokation (platform-sikkert)
   useEffect(() => {
-    const initializeLocationAndRadius = async () => {
-      try {
-        const savedRadius = await AsyncStorage.getItem('liguster_radius');
-        if (savedRadius) setRadius(Number(savedRadius));
-      } catch (e) {
-        console.error("Kunne ikke hente radius fra storage", e);
-      }
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Placering påkrævet', 'Du skal give adgang til din placering for at kunne filtrere opslag baseret på afstand.');
+    let cancelled = false;
+
+    const init = async () => {
+      const savedRadius = await storageGet('liguster_radius');
+      if (savedRadius && !cancelled) setRadius(Number(savedRadius));
+
+      // Web: brug browser geolocation, ingen permissions dialog via expo-location
+      if (isWeb()) {
+        if (typeof window === 'undefined' || !('geolocation' in (navigator ?? {}))) {
+          console.warn('Geolocation ikke tilgængelig på web.');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (cancelled) return;
+            setUserLocation({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            });
+          },
+          (err) => {
+            console.warn('Web geolocation fejl:', err?.message);
+          },
+          { enableHighAccuracy: false, maximumAge: 60_000, timeout: 10_000 }
+        );
         return;
       }
-      const location = await Location.getCurrentPositionAsync({});
-      setUserLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+
+      // Native (iOS/Android): brug expo-location
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          safeAlert('Placering påkrævet', 'Giv adgang til placering for at filtrere opslag efter afstand.');
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({});
+        if (!cancelled) {
+          setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        }
+      } catch (e: any) {
+        console.warn('location error:', e?.message ?? e);
+      }
     };
-    initializeLocationAndRadius();
+
+    init();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchPosts = useCallback(async () => {
@@ -90,16 +173,23 @@ export function useNabolag() {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) {
-      Alert.alert('Fejl', 'Kunne ikke hente opslag: ' + error.message);
+      safeAlert('Fejl', 'Kunne ikke hente opslag: ' + error.message);
       setAllPosts([]);
     } else {
-      setAllPosts(data || []);
+      setAllPosts(data ?? []);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchPosts();
+    let mounted = true;
+    (async () => {
+      await fetchPosts();
+      if (!mounted) return;
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [fetchPosts]);
 
   const onRefresh = useCallback(async () => {
@@ -107,42 +197,51 @@ export function useNabolag() {
     await fetchPosts();
     setRefreshing(false);
   }, [fetchPosts]);
-  
-  const createPost = async (postData) => {
-    if (!userId) {
-      Alert.alert('Fejl', 'Du skal være logget ind for at oprette et opslag.');
-      return false;
-    }
-    // --- RETTELSE HER ---
-    // Vi fjerner 'id' fra objektet, før vi sender det til databasen.
-    const { id, ...insertData } = postData; 
-    const { error } = await supabase.from('posts').insert([{ ...insertData, user_id: userId }]);
-    if (error) {
-      Alert.alert('Fejl', 'Kunne ikke oprette opslag: ' + error.message);
-      return false;
-    }
-    await fetchPosts();
-    return true;
-  };
 
-  const handleRadiusChange = async (newRadius: number) => {
+  const createPost = useCallback(
+    async (postData: Partial<Post>) => {
+      if (!userId) {
+        safeAlert('Fejl', 'Du skal være logget ind for at oprette et opslag.');
+        return false;
+      }
+      // Fjern evt. id før insert
+      const { id: _drop, user_id: _drop2, ...insertData } = postData;
+      const { error } = await supabase
+        .from('posts')
+        .insert([{ ...insertData, user_id: userId }]);
+      if (error) {
+        safeAlert('Fejl', 'Kunne ikke oprette opslag: ' + error.message);
+        return false;
+      }
+      await fetchPosts();
+      return true;
+    },
+    [userId, fetchPosts]
+  );
+
+  const handleRadiusChange = useCallback(async (newRadius: number) => {
     setRadius(newRadius);
-    await AsyncStorage.setItem('liguster_radius', String(newRadius));
-  };
+    await storageSet('liguster_radius', String(newRadius));
+  }, []);
 
   const filteredPosts = useMemo(() => {
-    return allPosts.filter(post => {
-      const search = searchQuery.toLowerCase();
+    const search = searchQuery.trim().toLowerCase();
+    return allPosts.filter((post) => {
       const matchesSearch =
+        !search ||
         post.overskrift?.toLowerCase().includes(search) ||
         post.omraade?.toLowerCase().includes(search) ||
         post.text?.toLowerCase().includes(search);
+
       const matchesKategori =
         kategoriFilter === KATEGORIER[0] || post.kategori === kategoriFilter;
+
       if (userLocation && post.latitude && post.longitude) {
         const dist = distanceInKm(
-          userLocation.latitude, userLocation.longitude,
-          post.latitude, post.longitude
+          userLocation.latitude,
+          userLocation.longitude,
+          post.latitude,
+          post.longitude
         );
         return matchesSearch && matchesKategori && dist <= radius;
       }
@@ -151,8 +250,23 @@ export function useNabolag() {
   }, [allPosts, searchQuery, kategoriFilter, radius, userLocation]);
 
   return {
-    userId, userLocation, loading, refreshing, filteredPosts,
-    searchQuery, setSearchQuery, radius, handleRadiusChange,
-    kategoriFilter, setKategoriFilter, onRefresh, createPost, distanceInKm,
+    // data
+    userId,
+    userLocation,
+    loading,
+    refreshing,
+    filteredPosts,
+    // søgning/filtre
+    searchQuery,
+    setSearchQuery,
+    radius,
+    handleRadiusChange,
+    kategoriFilter,
+    setKategoriFilter,
+    // actions
+    onRefresh,
+    createPost,
+    // utils
+    distanceInKm,
   };
 }
