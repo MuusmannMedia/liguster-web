@@ -1,14 +1,15 @@
 {
   "expo": {
-    "name": "liguster",
+    "name": "Liguster",
     "slug": "liguster-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon-1024.png",
     "scheme": "ligusterapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "buildNumber": "2",
       "supportsTablet": true,
       "bundleIdentifier": "dk.liguster.app",
       "infoPlist": {
@@ -20,17 +21,35 @@
       "package": "dk.liguster.app",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/adaptive-foreground.png",
+        "backgroundColor": "#131921"
       },
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": false,
           "data": [
-            { "scheme": "ligusterapp" }
+            {
+              "scheme": "ligusterapp"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "ligusterapp"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -47,16 +66,24 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#131921"
         }
       ]
     ],
-    "experiments": { "typedRoutes": true },
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
       "router": {},
-      "eas": { "projectId": "510eb874-f1b3-4c29-9c58-4d19f0dd6272" },
+      "eas": {
+        "projectId": "510eb874-f1b3-4c29-9c58-4d19f0dd6272"
+      },
       "supabaseUrl": "https://gizskyfynvyvhnaqcyax.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpenNreWZ5bnZ5dmhuYXFjeWF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4NjQ2ODUsImV4cCI6MjA2NjQ0MDY4NX0.4CpLeX9NFoZLEbfwXkGSTOFwH7drrG7SeEHW51Ic_Bg"
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/510eb874-f1b3-4c29-9c58-4d19f0dd6272"
     }
   }
 }
