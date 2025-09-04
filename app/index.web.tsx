@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function WebLanding() {
-  // Beholdt console-logs til fejlsøgning (kan fjernes når alt virker)
   useEffect(() => {
     console.log("EXPO_PUBLIC_SUPABASE_URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
     console.log(
@@ -25,10 +24,16 @@ export default function WebLanding() {
               Liguster samler hverdagen i dit nabolag.
             </Text>
 
-            {/* Ingen signup-CTA her længere */}
             <Text style={styles.heroNote}>
               Webudgaven er under udvikling. Har du allerede en konto, kan du logge ind nedenfor.
             </Text>
+
+            {/* Link til Privacy direkte i hero */}
+            <View style={styles.inlineLinks}>
+              <Link href="/privacy" style={styles.inlineLink} accessibilityRole="link">
+                Privacy Policy
+              </Link>
+            </View>
           </View>
 
           <View style={styles.heroCol}>
@@ -59,14 +64,19 @@ export default function WebLanding() {
         </View>
       </View>
 
-      {/* Bottom CTA – kun login-link */}
+      {/* Bottom CTA – login + privacy link */}
       <View style={styles.bottomCta}>
         <Text style={styles.bottomCtaTitle}>Klar til at logge ind?</Text>
         <View style={styles.bottomCtaRow}>
           <Link href="/LoginScreen" style={styles.bottomLink} accessibilityRole="link">
             Log ind
           </Link>
+          <Text style={styles.dot}>·</Text>
+          <Link href="/privacy" style={styles.bottomLink} accessibilityRole="link">
+            Privacy Policy
+          </Link>
         </View>
+        <Text style={styles.copy}>© {new Date().getFullYear()} Liguster</Text>
       </View>
     </ScrollView>
   );
@@ -104,7 +114,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     maxWidth: 560,
   },
-  // cta/ctaText kan blive liggende selvom de ikke bruges – ufarligt
   cta: {
     backgroundColor: "#22c55e",
     paddingVertical: 12,
@@ -114,6 +123,9 @@ const styles = StyleSheet.create({
   ctaText: { color: "#0b1220", fontWeight: "800" },
   heroNote: { color: "#94a3b8", fontSize: 13, marginTop: 10 },
   heroImage: { width: "100%", height: 320 },
+
+  inlineLinks: { flexDirection: "row", gap: 16, marginTop: 12 },
+  inlineLink: { color: "#93c5fd", textDecorationLine: "underline", fontSize: 14 },
 
   /* Features */
   section: { backgroundColor: "#0f1623", paddingVertical: 40 },
@@ -151,9 +163,11 @@ const styles = StyleSheet.create({
     paddingVertical: 36,
     paddingHorizontal: 24,
     alignItems: "center",
-    gap: 12,
+    gap: 8,
   },
   bottomCtaTitle: { color: "#e2e8f0", fontWeight: "800", fontSize: 20 },
-  bottomCtaRow: { flexDirection: "row", gap: 16, alignItems: "center" },
-  bottomLink: { color: "#cbd5e1" },
+  bottomCtaRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+  bottomLink: { color: "#cbd5e1", fontSize: 14 },
+  dot: { color: "#475569", fontSize: 18, marginHorizontal: 4, marginTop: -2 },
+  copy: { color: "#64748b", fontSize: 12, marginTop: 6 },
 });
