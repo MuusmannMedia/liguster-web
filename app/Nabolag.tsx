@@ -1,6 +1,5 @@
 // app/Nabolag.tsx
-
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,20 +13,56 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
-  useWindowDimensions
-} from 'react-native';
-import BottomNav from '../components/BottomNav';
-import OpretOpslagDialog from '../components/OpretOpslagDialog';
-import OpslagDetaljeModal from '../components/OpslagDetaljeModal';
-import SvarModal from '../components/SvarModal';
-import { KATEGORIER, Post, useNabolag } from '../hooks/useNabolag'; // <-- Importerer vores nye hook
-import { supabase } from '../utils/supabase';
+  useWindowDimensions,
+} from "react-native";
+import BottomNav from "../components/BottomNav";
+import OpretOpslagDialog from "../components/OpretOpslagDialog";
+import OpslagDetaljeModal from "../components/OpslagDetaljeModal";
+import SvarModal from "../components/SvarModal";
+import { KATEGORIER, Post, useNabolag } from "../hooks/useNabolag";
+import { supabase } from "../utils/supabase";
 
-// Disse dialoger er rene UI-komponenter og kan blive her,
-// eller flyttes til deres egne filer i /components mappen for endnu mere orden.
+/* ─────────────────────────────────  Konstanter / tema  ───────────────────────────────── */
+const COLORS = {
+  bg: "#7C8996",
+  text: "#131921",
+  white: "#fff",
+  blue: "#131921",
+  blueTint: "#25489022",
+  grayText: "#666",
+  fieldBorder: "#c7ced6",
+};
+const RADII = { sm: 8, md: 10, lg: 14, xl: 18 };
+const SHADOW = {
+  card: {
+    shadowColor: "#000",
+    shadowOpacity: 0.07,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  lift: {
+    shadowColor: "#000",
+    shadowOpacity: 0.09,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+};
 const distances = [1, 2, 3, 5, 10, 20, 50];
 
-function RadiusDialog({ visible, value, onClose, onChange }) {
+/* ─────────────────────────────  Små dialog-komponenter  ───────────────────────────── */
+function RadiusDialog({
+  visible,
+  value,
+  onClose,
+  onChange,
+}: {
+  visible: boolean;
+  value: number;
+  onClose: () => void;
+  onChange: (v: number) => void;
+}) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={dialogStyles.overlay}>
@@ -37,9 +72,12 @@ function RadiusDialog({ visible, value, onClose, onChange }) {
             <TouchableOpacity
               key={d}
               style={[dialogStyles.option, d === value && dialogStyles.selectedOption]}
-              onPress={() => { onChange(d); onClose(); }}
+              onPress={() => {
+                onChange(d);
+                onClose();
+              }}
             >
-              <Text style={{ fontWeight: d === value ? 'bold' : 'normal' }}>{d} km</Text>
+              <Text style={{ fontWeight: d === value ? "bold" : "normal" }}>{d} km</Text>
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={dialogStyles.closeBtn} onPress={onClose}>
@@ -51,7 +89,17 @@ function RadiusDialog({ visible, value, onClose, onChange }) {
   );
 }
 
-function KategoriDialog({ visible, value, onClose, onChange }) {
+function KategoriDialog({
+  visible,
+  value,
+  onClose,
+  onChange,
+}: {
+  visible: boolean;
+  value: string | null;
+  onClose: () => void;
+  onChange: (v: string | null) => void;
+}) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={dialogStyles.overlay}>
@@ -61,9 +109,12 @@ function KategoriDialog({ visible, value, onClose, onChange }) {
             <TouchableOpacity
               key={k}
               style={[dialogStyles.option, k === value && dialogStyles.selectedOption]}
-              onPress={() => { onChange(k); onClose(); }}
+              onPress={() => {
+                onChange(k);
+                onClose();
+              }}
             >
-              <Text style={{ fontWeight: k === value ? 'bold' : 'normal' }}>{k}</Text>
+              <Text style={{ fontWeight: k === value ? "bold" : "normal" }}>{k}</Text>
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={dialogStyles.closeBtn} onPress={onClose}>
@@ -75,8 +126,8 @@ function KategoriDialog({ visible, value, onClose, onChange }) {
   );
 }
 
+/* ─────────────────────────────────────  Skærm  ───────────────────────────────────── */
 export default function Nabolag() {
-  // Al logik og state er nu samlet i denne ene linje.
   const {
     userId,
     userLocation,
@@ -94,7 +145,6 @@ export default function Nabolag() {
     distanceInKm,
   } = useNabolag();
 
-  // State for modals styres stadig lokalt i UI-komponenten
   const [opretVisible, setOpretVisible] = useState(false);
   const [detaljeVisible, setDetaljeVisible] = useState(false);
   const [svarVisible, setSvarVisible] = useState(false);
@@ -102,29 +152,35 @@ export default function Nabolag() {
   const [kategoriVisible, setKategoriVisible] = useState(false);
   const [valgtOpslag, setValgtOpslag] = useState<Post | null>(null);
 
-  // --- Logik til dynamisk grid-layout ---
+  // Dynamisk grid
   const { width } = useWindowDimensions();
   const numColumns = width >= 900 ? 3 : width >= 650 ? 2 : 1;
   const isGrid = numColumns > 1;
   const ITEM_GAP = 18;
   const SIDE_PADDING = isGrid ? 18 : 0;
-  const itemWidth = isGrid ? (width - SIDE_PADDING * 2 - ITEM_GAP * (numColumns - 1)) / numColumns : '100%';
+  const itemWidth = isGrid
+    ? (width - SIDE_PADDING * 2 - ITEM_GAP * (numColumns - 1)) / numColumns
+    : "100%";
 
-  const handleOpretOpslag = async (postData) => {
+  const handleOpretOpslag = async (postData: any) => {
     const success = await createPost(postData);
-    if (success) {
-      setOpretVisible(false);
-    }
+    if (success) setOpretVisible(false);
   };
 
   return (
     <View style={styles.root}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.content}>
-          <TouchableOpacity style={styles.welcomeBox} onPress={() => setOpretVisible(true)} activeOpacity={0.88}>
-            <Text style={styles.opretOpslagBtnText}>OPRET OPSLAG</Text>
+          {/* Primær CTA */}
+          <TouchableOpacity
+            style={styles.primaryCta}
+            onPress={() => setOpretVisible(true)}
+            activeOpacity={0.88}
+          >
+            <Text style={styles.primaryCtaText}>OPRET OPSLAG</Text>
           </TouchableOpacity>
 
+          {/* Filtre */}
           <View style={styles.filterRow}>
             <TextInput
               value={searchQuery}
@@ -134,26 +190,31 @@ export default function Nabolag() {
               placeholderTextColor="#666"
               returnKeyType="search"
             />
-            <TouchableOpacity style={styles.kategoriBtn} onPress={() => setKategoriVisible(true)} activeOpacity={0.7}>
-              <Text style={styles.kategoriBtnText}>▼</Text>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => setKategoriVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.iconBtnText}>▼</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.radiusBtn} onPress={() => setRadiusVisible(true)}>
               <Text style={styles.radiusBtnText}>{radius} km</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Liste */}
           {loading ? (
-            <ActivityIndicator size="large" color="#254890" style={{ marginTop: 30 }} />
+            <ActivityIndicator size="large" color={COLORS.blue} style={{ marginTop: 30 }} />
           ) : (
             <FlatList
               data={filteredPosts}
               keyExtractor={(item) => item.id}
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
               contentContainerStyle={{
                 paddingTop: 10,
                 paddingBottom: 80,
                 paddingHorizontal: SIDE_PADDING,
-                alignItems: isGrid ? 'center' : 'stretch',
+                alignItems: isGrid ? "center" : "stretch",
               }}
               keyboardShouldPersistTaps="handled"
               numColumns={numColumns}
@@ -167,34 +228,49 @@ export default function Nabolag() {
                   style={{ width: itemWidth, marginBottom: index === filteredPosts.length - 1 ? 0 : 18 }}
                   activeOpacity={0.87}
                 >
-                  <View style={styles.opslagBox}>
-                    {item.image_url && <Image source={{ uri: item.image_url }} style={styles.opslagImage} />}
-                    {item.kategori && (
-                      <View style={styles.kategoriBadge}>
-                        <Text style={styles.kategoriBadgeText}>{item.kategori}</Text>
+                  <View style={styles.card}>
+                    {!!item.image_url && (
+                      <Image source={{ uri: item.image_url }} style={styles.cardImage} />
+                    )}
+
+                    {!!item.kategori && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{item.kategori}</Text>
                       </View>
                     )}
-                    <Text style={styles.opslagTitle}>{item.overskrift}</Text>
-                    <Text style={styles.opslagOmraade}>{item.omraade}</Text>
-                    <Text style={styles.opslagTeaser} numberOfLines={1} ellipsizeMode="tail">
+
+                    <Text style={styles.cardTitle}>{item.overskrift}</Text>
+                    <Text style={styles.cardPlace}>{item.omraade}</Text>
+                    <Text style={styles.cardTeaser} numberOfLines={1} ellipsizeMode="tail">
                       {item.text}
                     </Text>
-                    {userLocation && item.latitude && item.longitude && (
-                      <Text style={{ fontSize: 11, color: '#888', marginTop: 3 }}>
-                        {distanceInKm(userLocation.latitude, userLocation.longitude, item.latitude, item.longitude).toFixed(1)} km væk
+
+                    {userLocation && item.latitude && item.longitude ? (
+                      <Text style={styles.distance}>
+                        {distanceInKm(
+                          userLocation.latitude,
+                          userLocation.longitude,
+                          item.latitude,
+                          item.longitude
+                        ).toFixed(1)}{" "}
+                        km væk
                       </Text>
-                    )}
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={<Text style={{ color: '#666', marginTop: 22, alignSelf: 'center' }}>Ingen opslag fundet.</Text>}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#254890']} />}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>Ingen opslag fundet.</Text>
+              }
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} />
+              }
             />
           )}
         </View>
       </TouchableWithoutFeedback>
 
-      {/* --- Modals --- */}
+      {/* Modals */}
       <OpslagDetaljeModal
         visible={detaljeVisible}
         opslag={valgtOpslag}
@@ -205,71 +281,159 @@ export default function Nabolag() {
           setSvarVisible(true);
         }}
       />
+
       <SvarModal
         visible={svarVisible}
         onClose={() => setSvarVisible(false)}
         onSend={async (svarTekst) => {
           if (!valgtOpslag || !userId || !valgtOpslag.user_id) return;
-          const threadId = [userId, valgtOpslag.user_id].sort().join('_') + '_' + valgtOpslag.id;
-          await supabase.from('messages').insert([{
-            thread_id: threadId,
-            sender_id: userId,
-            receiver_id: valgtOpslag.user_id,
-            post_id: valgtOpslag.id,
-            text: svarTekst,
-          }]);
+          const threadId =
+            [userId, valgtOpslag.user_id].sort().join("_") + "_" + valgtOpslag.id;
+          await supabase.from("messages").insert([
+            {
+              thread_id: threadId,
+              sender_id: userId,
+              receiver_id: valgtOpslag.user_id,
+              post_id: valgtOpslag.id,
+              text: svarTekst,
+            },
+          ]);
           setSvarVisible(false);
         }}
       />
+
       <OpretOpslagDialog
         visible={opretVisible}
         onClose={() => setOpretVisible(false)}
         onSubmit={handleOpretOpslag}
         currentUserId={userId}
       />
+
       <RadiusDialog
         visible={radiusVisible}
         value={radius}
         onClose={() => setRadiusVisible(false)}
         onChange={handleRadiusChange}
       />
+
       <KategoriDialog
         visible={kategoriVisible}
         value={kategoriFilter}
         onClose={() => setKategoriVisible(false)}
         onChange={setKategoriFilter}
       />
+
       <BottomNav />
     </View>
   );
 }
 
-// Styles (uændret)
+/* ─────────────────────────────────────  Styles  ───────────────────────────────────── */
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#7C8996' },
-  content: { flex: 1, alignItems: 'center', paddingHorizontal: 20, paddingTop: 40 },
-  welcomeBox: { width: '100%', backgroundColor: '#131921', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 18, marginTop: 18, marginBottom: 0, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.09, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 3, borderWidth: 3, borderColor: '#fff' },
-  opretOpslagBtnText: { color: '#fff', fontSize: 17, fontWeight: 'bold', letterSpacing: 1 },
-  filterRow: { width: '100%', flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 6, gap: 10 },
-  searchInput: { flex: 1, backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 15, paddingVertical: 10, fontSize: 15, color: '#131921', borderWidth: 1.5, borderColor: '#c7ced6' },
-  kategoriBtn: { marginLeft: 3, marginRight: 3, backgroundColor: '#131921', borderRadius: 8, borderWidth: 3, borderColor: '#ffffffff', height: 45, width: 45, justifyContent: 'center', alignItems: 'center', elevation: 1, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  kategoriBtnText: { fontSize: 18, color: '#ffffffff', fontWeight: 'bold', alignSelf: 'center', marginTop: -2 },
-  radiusBtn: { backgroundColor: '#131921', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 0, borderWidth: 3, borderColor: '#ffffffff', justifyContent: 'center', alignItems: 'center', height: 45, minWidth: 54, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  radiusBtnText: { color: '#ffffffff', fontWeight: 'bold', fontSize: 15, letterSpacing: 1 },
-  opslagBox: { backgroundColor: '#fff', borderRadius: 14, padding: 12, width: '100%', minWidth: 0, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  kategoriBadge: { alignSelf: 'flex-start', backgroundColor: '#25489022', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 7, marginTop: 0 },
-  kategoriBadgeText: { color: '#131921', fontWeight: 'bold', fontSize: 13 },
-  opslagImage: { width: '100%', height: 120, borderRadius: 10, marginBottom: 10 },
-  opslagTitle: { fontWeight: 'bold', fontSize: 16, marginBottom: 2, textDecorationLine: 'underline' },
-  opslagOmraade: { fontSize: 14, color: '#222', marginBottom: 2 },
-  opslagTeaser: { fontSize: 14, color: '#444', marginTop: 3 }
+  root: { flex: 1, backgroundColor: COLORS.bg },
+  content: { flex: 1, alignItems: "center", paddingHorizontal: 20, paddingTop: 40 },
+
+  /* CTA */
+  primaryCta: {
+    width: "100%",
+    backgroundColor: COLORS.blue,
+    borderRadius: RADII.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    marginTop: 18,
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    ...SHADOW.lift,
+  },
+  primaryCtaText: { color: COLORS.white, fontSize: 17, fontWeight: "bold", letterSpacing: 1 },
+
+  /* Filtre */
+  filterRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 14,
+    marginBottom: 6,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: RADII.sm,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: COLORS.text,
+    borderWidth: 1.5,
+    borderColor: COLORS.fieldBorder,
+  },
+  iconBtn: {
+    height: 45,
+    width: 45,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.blue,
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.card,
+  },
+  iconBtnText: { fontSize: 18, color: COLORS.white, fontWeight: "bold", marginTop: -2 },
+  radiusBtn: {
+    minWidth: 54,
+    height: 45,
+    paddingHorizontal: 14,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.blue,
+    borderWidth: 3,
+    borderColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.card,
+  },
+  radiusBtnText: { color: COLORS.white, fontWeight: "bold", fontSize: 15, letterSpacing: 1 },
+
+  /* Kort / cards */
+  card: {
+    width: "100%",
+    backgroundColor: COLORS.white,
+    borderRadius: RADII.lg,
+    padding: 12,
+    ...SHADOW.card,
+  },
+  cardImage: { width: "100%", height: 120, borderRadius: RADII.md, marginBottom: 10 },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.blueTint,
+    borderRadius: RADII.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 7,
+  },
+  badgeText: { color: COLORS.text, fontWeight: "bold", fontSize: 13 },
+  cardTitle: { fontWeight: "bold", fontSize: 16, marginBottom: 2, textDecorationLine: "underline" },
+  cardPlace: { fontSize: 14, color: "#222", marginBottom: 2 },
+  cardTeaser: { fontSize: 14, color: "#444", marginTop: 3 },
+  distance: { fontSize: 11, color: "#888", marginTop: 3 },
+
+  emptyText: { color: COLORS.grayText, marginTop: 22, alignSelf: "center" },
 });
+
 const dialogStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(20,30,40,0.60)', justifyContent: 'center', alignItems: 'center' },
-  dialog: { backgroundColor: '#fff', borderRadius: 18, padding: 22, width: 260, alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: 'bold', color: '#131921', marginBottom: 15 },
-  option: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 7, marginBottom: 7, backgroundColor: '#f4f7fa', width: 210, alignItems: 'center' },
-  selectedOption: { backgroundColor: '#25489022', borderColor: '#131921', borderWidth: 3 },
+  overlay: { flex: 1, backgroundColor: "rgba(20,30,40,0.60)", justifyContent: "center", alignItems: "center" },
+  dialog: { backgroundColor: COLORS.white, borderRadius: RADII.xl, padding: 22, width: 260, alignItems: "center" },
+  title: { fontSize: 18, fontWeight: "bold", color: COLORS.text, marginBottom: 15 },
+  option: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: RADII.sm,
+    marginBottom: 7,
+    backgroundColor: "#f4f7fa",
+    width: 210,
+    alignItems: "center",
+  },
+  selectedOption: { backgroundColor: COLORS.blueTint, borderColor: COLORS.blue, borderWidth: 3 },
   closeBtn: { marginTop: 10, padding: 8 },
-  closeBtnText: { color: '#131921', fontWeight: 'bold' }
+  closeBtnText: { color: COLORS.text, fontWeight: "bold" },
 });

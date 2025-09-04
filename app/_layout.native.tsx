@@ -1,27 +1,34 @@
 // app/_layout.native.tsx
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React from "react";
+import { StyleSheet, View } from "react-native";
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { useRegisterPushToken } from "@/hooks/useRegisterPushToken";
+import { useSession } from "@/hooks/useSession";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  const { session } = useSession();
+  const userId = session?.user?.id ?? null;
+
+  // Registrer push når bruger er logget ind
+  useRegisterPushToken(userId ?? undefined);
 
   if (!loaded) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <View style={styles.root}>
         <StatusBar style="light" animated={false} translucent={false} />
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-          {/* Hovedskærme */}
+        <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="LoginScreen" />
           <Stack.Screen name="OpretBruger" />
@@ -31,8 +38,6 @@ export default function RootLayout() {
           <Stack.Screen name="ForeningerScreen" />
           <Stack.Screen name="MineOpslag" />
           <Stack.Screen name="Beskeder" />
-
-          {/* Ikke længere nogen request/reset‑skærme */}
           <Stack.Screen name="+not-found" />
         </Stack>
       </View>
@@ -41,5 +46,5 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#7C8996' },
+  root: { flex: 1, backgroundColor: "#7C8996" },
 });

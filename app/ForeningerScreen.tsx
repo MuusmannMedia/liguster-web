@@ -1,14 +1,14 @@
 // app/ForeningerScreen.tsx
-
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -26,17 +26,37 @@ export default function ForeningerScreen() {
   const [visning, setVisning] = useState<"mine" | "alle">("mine");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+
+  // nøgle der tvinger hooks/listen til at refetch/re-render
   const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const router = useRouter();
   const { session } = useSession();
   const userId = session?.user?.id;
 
+  // HENT DATA – afhænger af refreshKey
   const { data: alleForeninger = [], loading: loadingAlle } = useAlleForeninger(refreshKey);
   const { data: mineForeninger = [], loading: loadingMine } = useMineForeninger(userId, refreshKey);
 
   const foreninger: Forening[] = visning === "mine" ? mineForeninger : alleForeninger;
   const loading = visning === "mine" ? loadingMine : loadingAlle;
+
+  // REFRESH NÅR SIDEN FÅR FOKUS (fx efter sletning fra detaljeskærm)
+  useFocusEffect(
+    useCallback(() => {
+      // bump nøgle → hooks refetcher, liste re-renderer
+      setRefreshKey((k) => k + 1);
+      return () => {};
+    }, [])
+  );
+
+  const onPullToRefresh = useCallback(() => {
+    setRefreshing(true);
+    setRefreshKey((k) => k + 1);
+    // vi sætter refreshing false på næste tick – hooks refetcher selv
+    requestAnimationFrame(() => setRefreshing(false));
+  }, []);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -51,7 +71,7 @@ export default function ForeningerScreen() {
 
   // --- Responsive: iPhone = gammelt layout (330px), iPad = grid som Nabolag ---
   const { width } = useWindowDimensions();
-  const isPhoneSingle = width < 650;            // iPhone / smalle skærme
+  const isPhoneSingle = width < 650; // iPhone / smalle skærme
   const fixedWidth = 330;
 
   // Grid til tablets
@@ -136,6 +156,10 @@ export default function ForeningerScreen() {
               ? { paddingBottom: 90, alignItems: "center" }
               : { paddingBottom: 90, paddingHorizontal: SIDE_PADDING, alignItems: isGrid ? "center" : "stretch" }
           }
+          extraData={refreshKey}           // tving re-render når vi bumper nøglen
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onPullToRefresh} tintColor="#fff" />
+          }
           renderItem={({ item }) => {
             const wrapStyle = isPhoneSingle
               ? { width: fixedWidth, marginBottom: 17 }
@@ -148,7 +172,10 @@ export default function ForeningerScreen() {
               >
                 <View style={styles.card}>
                   {!!item.billede_url && (
-                    <Image source={{ uri: item.billede_url }} style={[styles.img, isPhoneSingle ? { height: 105 } : { height: 120 }]} />
+                    <Image
+                      source={{ uri: item.billede_url }}
+                      style={[styles.img, isPhoneSingle ? { height: 105 } : { height: 120 }]}
+                    />
                   )}
                   <Text style={styles.navn}>{item.navn}</Text>
                   <Text style={styles.sted}>{item.sted}</Text>
@@ -212,12 +239,7 @@ function CreateForeningModal({
     const { data, error } = await supabase
       .from("foreninger")
       .insert([
-        {
-          navn: navn.trim(),
-          sted: sted.trim(),
-          beskrivelse: beskrivelse.trim(),
-          oprettet_af: userId,
-        },
+        { navn: navn.trim(), sted: sted.trim(), beskrivelse: beskrivelse.trim(), oprettet_af: userId },
       ])
       .select("id")
       .single();
@@ -229,18 +251,16 @@ function CreateForeningModal({
     }
 
     if (data?.id) {
-      const { error: mErr } = await supabase.from("foreningsmedlemmer").insert([
-        { forening_id: data.id, user_id: userId!, rolle: "admin", status: "approved" },
-      ]);
+      const { error: mErr } = await supabase
+        .from("foreningsmedlemmer")
+        .insert([{ forening_id: data.id, user_id: userId!, rolle: "admin", status: "approved" }]);
       if (mErr) console.warn("Kunne ikke tilføje medlemskab:", mErr.message);
     }
 
     setLoading(false);
-    setNavn("");
-    setSted("");
-    setBeskrivelse("");
+    setNavn(""); setSted(""); setBeskrivelse("");
 
-    onCreated?.();
+    onCreated?.();     // bump liste i parent
     onClose();
 
     if (data?.id) router.push(`/forening/${data.id}`);
@@ -258,20 +278,10 @@ function CreateForeningModal({
         <Text style={styles.modalTitle}>Opret ny forening</Text>
 
         <Text style={styles.fieldLabel}>Navn</Text>
-        <TextInput
-          style={styles.modalInput}
-          placeholder="Navn på foreningen"
-          value={navn}
-          onChangeText={setNavn}
-        />
+        <TextInput style={styles.modalInput} placeholder="Navn på foreningen" value={navn} onChangeText={setNavn} />
 
         <Text style={styles.fieldLabel}>Sted</Text>
-        <TextInput
-          style={styles.modalInput}
-          placeholder="F.eks. København"
-          value={sted}
-          onChangeText={setSted}
-        />
+        <TextInput style={styles.modalInput} placeholder="F.eks. København" value={sted} onChangeText={setSted} />
 
         <Text style={styles.fieldLabel}>Beskrivelse</Text>
         <TextInput
@@ -283,11 +293,7 @@ function CreateForeningModal({
         />
 
         <View style={{ flexDirection: "row", gap: 12, marginTop: 15 }}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={[styles.modalBtn, { backgroundColor: "#aaa" }]}
-            disabled={loading}
-          >
+          <TouchableOpacity onPress={onClose} style={[styles.modalBtn, { backgroundColor: "#aaa" }]} disabled={loading}>
             <Text style={{ color: "#fff" }}>Annullér</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -304,129 +310,51 @@ function CreateForeningModal({
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#7C8996",
-    paddingTop: 60,
-  },
+  root: { flex: 1, backgroundColor: "#7C8996", paddingTop: 60 },
 
   // Top controls
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-    gap: 7,
-  },
+  searchRow: { flexDirection: "row", alignItems: "center", marginBottom: 10, gap: 7 },
   searchWrap: { flex: 1, position: "relative" },
   searchInput: {
-    height: 44,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: "#222",
-    borderWidth: 1,
-    borderColor: "#dde1e8",
+    height: 44, backgroundColor: "#fff", borderRadius: 8, paddingHorizontal: 14, fontSize: 15, color: "#222",
+    borderWidth: 1, borderColor: "#dde1e8",
   },
   searchIcon: { position: "absolute", right: 12, top: 11 },
   addBtn: {
-    height: 44,
-    width: 44,
-    borderRadius: 8,
-    backgroundColor: "#131921",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#fff",
+    height: 44, width: 44, borderRadius: 8, backgroundColor: "#131921",
+    alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff",
   },
 
-  switchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 15,
-    gap: 10,
-  },
-  switchBtn: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  switchBtnActive: {
-    backgroundColor: "#131921",
-    borderWidth: 3,
-    borderColor: "#fff",
-  },
+  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 15, gap: 10 },
+  switchBtn: { flex: 1, backgroundColor: "#fff", borderRadius: 8, paddingVertical: 10, alignItems: "center" },
+  switchBtnActive: { backgroundColor: "#131921", borderWidth: 3, borderColor: "#fff" },
   switchText: { color: "#131921", fontWeight: "bold", fontSize: 10, letterSpacing: 0.5 },
   switchTextActive: { color: "#fff", fontWeight: "bold" },
 
   // Cards
   card: {
-    width: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 13,
-    padding: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.11,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    width: "100%", backgroundColor: "#fff", borderRadius: 13, padding: 12,
+    shadowColor: "#000", shadowOpacity: 0.11, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   img: { width: "100%", borderRadius: 9, marginBottom: 6, resizeMode: "cover" },
-  navn: { fontWeight: "bold", fontSize: 16, color: "#254890", marginBottom: 2 },
+  navn: { fontWeight: "bold", fontSize: 16, color: "#131921", marginBottom: 2 },
   sted: { color: "#444", fontSize: 15, marginBottom: 4, fontWeight: "600" },
   beskrivelse: { color: "#666", fontSize: 14 },
 
   // Modal
   modalBackdrop: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: "rgba(40,50,60,0.43)",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 100,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(40,50,60,0.43)", alignItems: "center", justifyContent: "center", zIndex: 100,
   },
   modalContent: {
-    width: 320,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 7,
+    width: 320, backgroundColor: "#fff", borderRadius: 12, padding: 20,
+    shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 10, elevation: 7,
   },
-  modalTitle: {
-    fontWeight: "bold",
-    fontSize: 22,
-    color: "#254890",
-    marginBottom: 13,
-    textAlign: "center",
-  },
-  fieldLabel: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#254890",
-    marginBottom: 2,
-    marginTop: 6,
-  },
+  modalTitle: { fontWeight: "bold", fontSize: 22, color: "#254890", marginBottom: 13, textAlign: "center" },
+  fieldLabel: { fontSize: 15, fontWeight: "bold", color: "#254890", marginBottom: 2, marginTop: 6 },
   modalInput: {
-    backgroundColor: "#f3f3f7",
-    borderRadius: 7,
-    padding: 9,
-    fontSize: 17,
-    color: "#222",
-    borderWidth: 1,
-    borderColor: "#dde1e8",
-    marginBottom: 8,
+    backgroundColor: "#f3f3f7", borderRadius: 7, padding: 9, fontSize: 17,
+    color: "#222", borderWidth: 1, borderColor: "#dde1e8", marginBottom: 8,
   },
-  modalBtn: {
-    flex: 1,
-    backgroundColor: "#254890",
-    borderRadius: 7,
-    padding: 13,
-    alignItems: "center",
-  },
+  modalBtn: { flex: 1, backgroundColor: "#254890", borderRadius: 7, padding: 13, alignItems: "center" },
 });

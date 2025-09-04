@@ -34,22 +34,27 @@ const KATEGORIER = [
   "Hjælp søges",
   "Hjælp tilbydes",
   "Byttes",
+  "Udlejning",
+  "Sælges",
+  "Andet",
 ];
+
+type SubmitData = {
+  id?: string;
+  overskrift: string;
+  omraade: string;
+  text: string;
+  user_id: string;
+  image_url?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  kategori: string;
+};
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (data: {
-    id?: string;
-    overskrift: string;
-    omraade: string;
-    text: string;
-    user_id: string;
-    image_url?: string | null;
-    latitude?: number;
-    longitude?: number;
-    kategori: string;
-  }) => void;
+  onSubmit: (data: SubmitData) => void;
   initialValues?: {
     id?: string;
     overskrift?: string;
@@ -58,6 +63,9 @@ type Props = {
     text?: string;
     image_url?: string | null;
     kategori?: string;
+    // NYT: send eksisterende koordinater ind ved redigering
+    latitude?: number | null;
+    longitude?: number | null;
   };
 };
 
@@ -173,6 +181,9 @@ export default function OpretOpslagDialog({
   const [uploading, setUploading] = useState(false);
   const [kategori, setKategori] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Hold eksisterende koordinater når vi redigerer
+  const [lat, setLat] = useState<number | null | undefined>(undefined);
+  const [lng, setLng] = useState<number | null | undefined>(undefined);
 
   useEffect(() => {
     const getUser = async () => {
@@ -184,13 +195,11 @@ export default function OpretOpslagDialog({
       setId(initialValues?.id || undefined);
       setOverskrift(initialValues?.overskrift || "");
       setOmraade(initialValues?.omraade || "");
-      setBeskrivelse(
-        initialValues?.beskrivelse ?? initialValues?.text ?? ""
-      );
-      setBillede(
-        initialValues?.image_url ? { uri: initialValues.image_url } : null
-      );
+      setBeskrivelse(initialValues?.beskrivelse ?? initialValues?.text ?? "");
+      setBillede(initialValues?.image_url ? { uri: initialValues.image_url } : null);
       setKategori(initialValues?.kategori || "");
+      setLat(initialValues?.latitude ?? null);
+      setLng(initialValues?.longitude ?? null);
     }
   }, [visible, initialValues]);
 
@@ -200,10 +209,8 @@ export default function OpretOpslagDialog({
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== "granted") throw new Error("Kameratilladelse mangler.");
       } else {
-        const { status } =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== "granted")
-          throw new Error("Billedbibliotek-tilladelse mangler.");
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") throw new Error("Billedbibliotek-tilladelse mangler.");
       }
 
       let result;
@@ -219,7 +226,7 @@ export default function OpretOpslagDialog({
         });
       }
       if (!result.canceled) {
-        let asset = result.assets?.[0];
+        const asset = result.assets?.[0];
         if (asset?.uri) {
           const manipResult = await ImageManipulator.manipulateAsync(
             asset.uri,
@@ -255,6 +262,22 @@ export default function OpretOpslagDialog({
     }
   };
 
+  // Hent lokation “blødt” – ingen blokering/fejl hvis det ikke lykkes
+  const tryGetForegroundLocation = async (): Promise<{ lat: number; lng: number } | null> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return null;
+
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        // i simulator fejler det ofte – lad standard timeout gælde
+      });
+      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    } catch {
+      return null; // simulator / ingen signal / m.m.
+    }
+  };
+
   const handleSubmit = async () => {
     if (!overskrift.trim() || !omraade.trim() || !beskrivelse.trim() || !kategori) {
       return Alert.alert("Udfyld alle felter og vælg en kategori");
@@ -262,8 +285,11 @@ export default function OpretOpslagDialog({
     if (!currentUserId) {
       return Alert.alert("Bruger ikke fundet. Prøv at logge ind igen.");
     }
+
+    const isEditing = !!id;
     setUploading(true);
     try {
+      // Billede
       let imageUrl = initialValues?.image_url || null;
       if (billede && billede.uri && !billede.uri.startsWith("http")) {
         imageUrl = await uploadImageBase64(billede, currentUserId);
@@ -271,14 +297,19 @@ export default function OpretOpslagDialog({
         imageUrl = null;
       }
 
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        return Alert.alert(
-          "Placering kræves",
-          "Du skal give adgang til din placering for at oprette opslag."
-        );
+      // Lokation:
+      // - Ved redigering: behold eksisterende koordinater hvis vi har dem; prøv ellers blødt at hente nye.
+      // - Ved oprettelse: prøv blødt at hente; fortsæt også hvis ikke muligt.
+      let latitude: number | null | undefined = lat ?? null;
+      let longitude: number | null | undefined = lng ?? null;
+
+      if (!isEditing || (isEditing && (latitude == null || longitude == null))) {
+        const got = await tryGetForegroundLocation();
+        if (got) {
+          latitude = got.lat;
+          longitude = got.lng;
+        }
       }
-      let loc = await Location.getCurrentPositionAsync({});
 
       onSubmit({
         id,
@@ -287,8 +318,8 @@ export default function OpretOpslagDialog({
         text: beskrivelse,
         user_id: currentUserId,
         image_url: imageUrl,
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
         kategori,
       });
     } catch (err: any) {

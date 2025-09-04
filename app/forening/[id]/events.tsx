@@ -11,9 +11,11 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -59,6 +61,12 @@ type RegRow = {
   } | null;
 };
 
+type PushStats = {
+  forening_id: string;
+  total_members: number;
+  active_push_members: number;
+};
+
 const REG_TABLE = "forening_event_registrations";
 const ALT_REG_TABLE = "forening_event_tilmeldinger";
 
@@ -93,6 +101,82 @@ const displayName = (u?: RegRow["users"]) => {
   return email.includes("@") ? email.split("@")[0] : "Ukendt";
 };
 
+function base64Bytes(b64: string): number {
+  const len = b64.length;
+  const padding = (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+  return Math.floor((len * 3) / 4) - padding;
+}
+
+/** Komprimer og nedskaler billede til max 1600 px bredde og ~60% kvalitet. */
+async function compressImage(uri: string, maxBytes = 2 * 1024 * 1024) {
+  let quality = 0.6;
+  let out = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1600 } }],
+    { compress: quality, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+
+  let bytes = out.base64 ? base64Bytes(out.base64) : Number.MAX_SAFE_INTEGER;
+  while (bytes > maxBytes && quality > 0.3) {
+    quality = Math.max(0.3, quality - 0.1);
+    out = await ImageManipulator.manipulateAsync(
+      out.uri,
+      [],
+      { compress: quality, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    bytes = out.base64 ? base64Bytes(out.base64) : Number.MAX_SAFE_INTEGER;
+  }
+  return out;
+}
+
+/* ---------- Lille, hook-fri række-komponent ---------- */
+const EventListRow = React.memo(function EventListRow({
+  e,
+  count,
+  deleting,
+  onOpen,
+  onDelete,
+  canDelete,
+}: {
+  e: EventRow;
+  count: number;
+  deleting: boolean;
+  onOpen: (ev: EventRow) => void;
+  onDelete: (ev: EventRow) => void;
+  canDelete: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => onOpen(e)}
+      style={[styles.section, styles.rowBg, { paddingVertical: 10 }]}
+    >
+      {e.image_url ? <Image source={{ uri: e.image_url }} style={styles.cardImage} /> : null}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowTitle}>{e.title}</Text>
+        <Text style={styles.rowMeta}>{fmtRange(e.start_at, e.end_at)}</Text>
+        {!!e.location && <Text style={styles.rowMeta}>📍 {e.location}</Text>}
+        {!!e.price && <Text style={styles.rowMeta}>Pris: {e.price} kr.</Text>}
+        {e.allow_registration ? (
+          <Text style={[styles.rowMeta, { marginTop: 2 }]}>
+            {e.capacity ? `${count} / ${e.capacity} tilmeldt` : `${count} tilmeldt`}
+          </Text>
+        ) : null}
+      </View>
+      {canDelete && (
+        <TouchableOpacity
+          onPress={() => onDelete(e)}
+          style={styles.iconDeleteBtn}
+          disabled={deleting}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.iconDeleteText}>{deleting ? "…" : "✕"}</Text>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+});
+
 export default function EventsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -103,8 +187,6 @@ export default function EventsScreen() {
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [members, setMembers] = useState<MedlemsRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
-
-  // Antal tilmeldte per event-id
   const [regCounts, setRegCounts] = useState<Record<string, number>>({});
 
   // Opret felter
@@ -150,6 +232,11 @@ export default function EventsScreen() {
   const [joining, setJoining] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
+  // Push-udsendelse status (én gang pr. event)
+  const [hasPushed, setHasPushed] = useState(false);
+  const [sendingPush, setSendingPush] = useState(false);
+  const [pushStats, setPushStats] = useState<PushStats | null>(null);
+
   // Medlemsstatus
   const myRow = useMemo(
     () => members.find((m) => m.user_id === userId) || null,
@@ -158,7 +245,7 @@ export default function EventsScreen() {
   const amAdmin = !!myRow && isAdmin(myRow, ownerId);
   const isApprovedMember = (myRow?.status ?? null) === "approved";
 
-  /* ---------- Én fælles dato/tid picker (centreret, OK/Annullér) ---------- */
+  /* ---------- Én fælles dato/tid picker ---------- */
   type PickerCtx = "create" | "edit";
   type Which = "start" | "end";
   type Mode = "date" | "time";
@@ -241,27 +328,26 @@ export default function EventsScreen() {
     React.useCallback(() => {
       (async () => {
         await fetchEvents();
-        await fetchCountsForEvents(events.map((e) => e.id)); // ekstra sikkerhed
+        await fetchCountsForEvents(events.map((e) => e.id));
       })();
       return () => {};
-    }, [id]) // bevidst ikke afhængig af events her
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id])
   );
 
-  /* ---------- Antal tilmeldte pr. event (robust + begge tabeller) ---------- */
+  /* ---------- Antal tilmeldte pr. event ---------- */
   const fetchCountsForEvents = async (eventIds: string[]) => {
     if (!eventIds.length) return;
 
     const next: Record<string, number> = { ...regCounts };
 
     const countVia = async (table: string, evId: string) => {
-      // ingen head:true => count kan stadig komme retur; ellers falder vi tilbage til data.length
       const { data, count, error } = await supabase
         .from(table)
         .select("event_id", { count: "exact" })
         .eq("event_id", evId);
-
       if (error) throw error;
-      return (typeof count === "number" ? count : (data?.length ?? 0));
+      return typeof count === "number" ? count : (data?.length ?? 0);
     };
 
     for (const evId of eventIds) {
@@ -356,6 +442,90 @@ export default function EventsScreen() {
     };
   }, [activeEvent?.id]);
 
+  /* ---------- PUSH: status, statistik og afsendelse ---------- */
+  const refreshHasPushed = async (ev: EventRow | null) => {
+    if (!ev) { setHasPushed(false); return; }
+    const { data, error } = await supabase
+      .from("event_push_broadcasts")
+      .select("id")
+      .eq("event_id", ev.id)
+      .maybeSingle();
+    if (error && String(error.message || "").includes("permission")) {
+      setHasPushed(false);
+      return;
+    }
+    setHasPushed(!!data);
+  };
+
+  const fetchPushStats = async (foreningId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("v_forening_push_stats")
+        .select("forening_id, total_members, active_push_members")
+        .eq("forening_id", foreningId)
+        .maybeSingle();
+      if (error) throw error;
+      setPushStats(data as PushStats);
+    } catch {
+      setPushStats(null);
+    }
+  };
+
+  const handleSendPush = async () => {
+    if (!activeEvent || !userId) return;
+    if (!(amAdmin || activeEvent.created_by === userId)) {
+      return Alert.alert("Adgang nægtet", "Kun skaberen eller en administrator kan udsende push.");
+    }
+
+    Alert.alert(
+      "Send push til medlemmer?",
+      "Denne besked kan kun sendes én gang for denne aktivitet.",
+      [
+        { text: "Annullér", style: "cancel" },
+        {
+          text: "Send",
+          style: "default",
+          onPress: async () => {
+            try {
+              setSendingPush(true);
+              const title = activeEvent.title || "Ny aktivitet";
+              const body =
+                activeEvent.location
+                  ? `${fmtRange(activeEvent.start_at, activeEvent.end_at)} • ${activeEvent.location}`
+                  : `${fmtRange(activeEvent.start_at, activeEvent.end_at)}`;
+
+              const { data, error } = await supabase.rpc("send_event_push", {
+                p_forening_id: activeEvent.forening_id,
+                p_event_id: activeEvent.id,
+                p_sender_id: userId,
+                p_title: title,
+                p_body: body,
+              });
+
+              if (error) {
+                const msg = String(error.message || "").toLowerCase();
+                if (msg.includes("already_sent")) {
+                  setHasPushed(true);
+                  Alert.alert("Allerede sendt", "Push er allerede udsendt for denne aktivitet.");
+                } else {
+                  throw error;
+                }
+              } else {
+                setHasPushed(true);
+                const count = typeof data === "number" ? data : 0;
+                Alert.alert("Besked på vej ✅", `Udsendt til ${count} medlem(mer).`);
+              }
+            } catch (e: any) {
+              Alert.alert("Fejl", e?.message ?? "Kunne ikke sende push.");
+            } finally {
+              setSendingPush(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   /* ----- Image Picker ----- */
   const ensureMediaPermission = async () => {
     const perm = await ImagePicker.getMediaLibraryPermissionsAsync();
@@ -372,14 +542,8 @@ export default function EventsScreen() {
         return;
       }
 
-      const anyPicker = ImagePicker as any;
-      const mediaTypesProp =
-        anyPicker?.MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images;
-
       const res = await ImagePicker.launchImageLibraryAsync({
-        // @ts-expect-error – vi tillader begge typer
-        mediaTypes: Array.isArray(mediaTypesProp) ? mediaTypesProp : mediaTypesProp,
-        allowsEditing: true,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
       });
 
@@ -387,11 +551,7 @@ export default function EventsScreen() {
       const asset = (res as any)?.assets?.[0];
       if (!asset?.uri) return;
 
-      const manipulated = await ImageManipulator.manipulateAsync(
-        asset.uri,
-        [{ resize: { width: 1600 } }],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      );
+      const manipulated = await compressImage(asset.uri, 2 * 1024 * 1024);
       if (!manipulated.base64) {
         Alert.alert("Fejl", "Kunne ikke læse billedet.");
         return;
@@ -411,6 +571,7 @@ export default function EventsScreen() {
     if (!startDate || !endDate) return Alert.alert("Dato/tid mangler", "Vælg både start og slut (dato og tid).");
 
     try {
+      Keyboard.dismiss();
       setSaving(true);
 
       // Upload billede hvis valgt
@@ -443,18 +604,15 @@ export default function EventsScreen() {
         capacity: capacity ? Number(capacity) : null,
         allow_registration: allowRegistration,
         image_url,
-        created_by: userId,
+        created_by: userId!,
       };
 
-      const { data, error } = await supabase
-        .from("forening_events")
-        .insert([payload])
-        .select()
-        .single();
-
+      const { error } = await supabase.from("forening_events").insert([payload]);
       if (error) throw error;
 
-      // ryd formular
+      await fetchEvents();
+      await new Promise((res) => requestAnimationFrame(res));
+
       setTitle("");
       setDescription("");
       setLocation("");
@@ -466,8 +624,6 @@ export default function EventsScreen() {
       setImagePreview(null);
       setImageBase64(null);
       setShowCreateForm(false);
-
-      setEvents((prev) => [data as EventRow, ...prev]);
     } catch (err: any) {
       Alert.alert("Fejl", err?.message ?? "Kunne ikke oprette aktiviteten.");
     } finally {
@@ -619,18 +775,23 @@ export default function EventsScreen() {
     }
   };
 
-  /* ---------- UI ---------- */
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#131921" />
-      </View>
-    );
-  }
+  /* ---------- Afledte lister ---------- */
+  const now = new Date();
+  const upcomingEvents = useMemo(() => {
+    return events
+      .filter((e) => new Date(e.end_at).getTime() >= now.getTime())
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+  }, [events, now]);
 
-  const ListHeader = (
+  const pastEvents = useMemo(() => {
+    return events
+      .filter((e) => new Date(e.end_at).getTime() < now.getTime())
+      .sort((a, b) => new Date(b.end_at).getTime() - new Date(a.end_at).getTime());
+  }, [events, now]);
+
+  /* ---------- Header ---------- */
+  const Header = (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      {/* Topbar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>‹</Text>
@@ -638,7 +799,6 @@ export default function EventsScreen() {
         <View style={{ width: 34 }} />
       </View>
 
-      {/* Toggle + opret-aktivitet */}
       <View style={[styles.section, { marginBottom: 0 }]}>
         <TouchableOpacity
           onPress={() => setShowCreateForm((s) => !s)}
@@ -678,39 +838,23 @@ export default function EventsScreen() {
               placeholderTextColor="#9aa0a6"
             />
 
-            {/* Start: dato + separat tid */}
-            <TouchableOpacity
-              onPress={() => openPicker("create", "start", "date")}
-              style={styles.pickerBtn}
-            >
+            {/* Start */}
+            <TouchableOpacity onPress={() => openPicker("create", "start", "date")} style={styles.pickerBtn}>
               <Text style={styles.pickerLabel}>Startdato *</Text>
-              <Text style={styles.pickerValue}>
-                {startDate ? fmtDate(startDate) : "Vælg dato"}
-              </Text>
+              <Text style={styles.pickerValue}>{startDate ? fmtDate(startDate) : "Vælg dato"}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => openPicker("create", "start", "time")}
-              style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}
-            >
+            <TouchableOpacity onPress={() => openPicker("create", "start", "time")} style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}>
               <Text style={styles.smallBtnText}>
                 {startDate ? `Vælg starttid (nu: ${fmtTime(startDate)})` : "Vælg starttid"}
               </Text>
             </TouchableOpacity>
 
-            {/* Slut: dato + separat tid */}
-            <TouchableOpacity
-              onPress={() => openPicker("create", "end", "date")}
-              style={styles.pickerBtn}
-            >
+            {/* Slut */}
+            <TouchableOpacity onPress={() => openPicker("create", "end", "date")} style={styles.pickerBtn}>
               <Text style={styles.pickerLabel}>Slutdato *</Text>
-              <Text style={styles.pickerValue}>
-                {endDate ? fmtDate(endDate) : "Vælg dato"}
-              </Text>
+              <Text style={styles.pickerValue}>{endDate ? fmtDate(endDate) : "Vælg dato"}</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => openPicker("create", "end", "time")}
-              style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}
-            >
+            <TouchableOpacity onPress={() => openPicker("create", "end", "time")} style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}>
               <Text style={styles.smallBtnText}>
                 {endDate ? `Vælg sluttid (nu: ${fmtTime(endDate)})` : "Vælg sluttid"}
               </Text>
@@ -740,10 +884,7 @@ export default function EventsScreen() {
               <View style={{ marginTop: 8 }}>
                 <Image source={{ uri: imagePreview }} style={styles.imagePreview} />
                 <TouchableOpacity
-                  onPress={() => {
-                    setImagePreview(null);
-                    setImageBase64(null);
-                  }}
+                  onPress={() => { setImagePreview(null); setImageBase64(null); }}
                   style={[styles.smallBtn, styles.grayBtn]}
                 >
                   <Text style={styles.smallBtnText}>Fjern billede</Text>
@@ -769,7 +910,14 @@ export default function EventsScreen() {
               onPress={createEvent}
               disabled={saving}
             >
-              <Text style={styles.createBtnText}>{saving ? "Opretter…" : "Opret aktivitet"}</Text>
+              {saving ? (
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.createBtnText}>Opretter…</Text>
+                </View>
+              ) : (
+                <Text style={styles.createBtnText}>Opret aktivitet</Text>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -777,58 +925,99 @@ export default function EventsScreen() {
     </KeyboardAvoidingView>
   );
 
+  /* ---------- Render ---------- */
   return (
     <View style={styles.mainContainer}>
-      {/* Root = FlatList */}
-      <FlatList
-        data={events}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={ListHeader}
-        ItemSeparatorComponent={() => (
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "#e9edf1" }} />
-        )}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        keyboardShouldPersistTaps="handled"
-        renderItem={({ item: e }) => {
-          const deleting = deletingId === e.id;
-          const count = regCounts[e.id] ?? 0;
-          return (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={async () => {
-                setActiveEvent(e);
-                setEditMode(false);
-                setShowEventModal(true);
-                await fetchAttendees(e.id);
-              }}
-              style={[styles.section, { paddingVertical: 10 }]}
-            >
-              {e.image_url ? <Image source={{ uri: e.image_url }} style={styles.cardImage} /> : null}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{e.title}</Text>
-                <Text style={styles.rowMeta}>{fmtRange(e.start_at, e.end_at)}</Text>
-                {!!e.location && <Text style={styles.rowMeta}>📍 {e.location}</Text>}
-                {!!e.price && <Text style={styles.rowMeta}>Pris: {e.price} kr.</Text>}
-                {e.allow_registration ? (
-                  <Text style={[styles.rowMeta, { marginTop: 2 }]}>
-                    {e.capacity ? `${count} / ${e.capacity} tilmeldt` : `${count} tilmeldt`}
-                  </Text>
-                ) : null}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#131921" />
+        </View>
+      ) : (
+        <FlatList
+          data={[{ key: "content" }]}
+          keyExtractor={(i) => i.key}
+          ListHeaderComponent={Header}
+          renderItem={null as any}
+          ListFooterComponent={
+            <View>
+              {/* KOMMENDE */}
+              <View className="groupCard" style={styles.groupCard}>
+                <View style={styles.groupHeader}>
+                  <Text style={styles.groupHeaderText}>KOMMENDE AKTIVITETER</Text>
+                </View>
+                {upcomingEvents.length === 0 ? (
+                  <Text style={[styles.sectionMuted, { margin: 12 }]}>Ingen kommende aktiviteter.</Text>
+                ) : (
+                  upcomingEvents.map((e) => {
+                    const deleting = deletingId === e.id;
+                    const count = regCounts[e.id] ?? 0;
+                    return (
+                      <EventListRow
+                        key={e.id}
+                        e={e}
+                        count={count}
+                        deleting={deleting}
+                        canDelete={canDeleteEvent(e)}
+                        onOpen={async (ev) => {
+                          setActiveEvent(ev);
+                          setEditMode(false);
+                          setShowEventModal(true);
+                          await fetchAttendees(ev.id);
+                          await refreshHasPushed(ev);
+                          await fetchPushStats(ev.forening_id);
+                        }}
+                        onDelete={deleteEvent}
+                      />
+                    );
+                  })
+                )}
               </View>
-              {canDeleteEvent(e) && (
-                <TouchableOpacity
-                  onPress={() => deleteEvent(e)}
-                  style={styles.iconDeleteBtn}
-                  disabled={deleting}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text style={styles.iconDeleteText}>{deleting ? "…" : "✕"}</Text>
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-          );
-        }}
-      />
+
+              {/* AFSLUTTEDE */}
+              <View style={styles.groupCard}>
+                <View style={styles.groupHeader}>
+                  <Text style={styles.groupHeaderText}>AFSLUTTEDE AKTIVITETER</Text>
+                </View>
+                {pastEvents.length === 0 ? (
+                  <Text style={[styles.sectionMuted, { margin: 12 }]}>Ingen afsluttede aktiviteter.</Text>
+                ) : (
+                  pastEvents.map((e) => {
+                    const deleting = deletingId === e.id;
+                    const count = regCounts[e.id] ?? 0;
+                    return (
+                      <EventListRow
+                        key={e.id}
+                        e={e}
+                        count={count}
+                        deleting={deleting}
+                        canDelete={canDeleteEvent(e)}
+                        onOpen={async (ev) => {
+                          setActiveEvent(ev);
+                          setEditMode(false);
+                          setShowEventModal(true);
+                          await fetchAttendees(ev.id);
+                          await refreshHasPushed(ev);
+                          await fetchPushStats(ev.forening_id);
+                        }}
+                        onDelete={deleteEvent}
+                      />
+                    );
+                  })
+                )}
+              </View>
+            </View>
+          }
+          ItemSeparatorComponent={() => (
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "#e9edf1" }} />
+          )}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews
+          windowSize={10}
+          maxToRenderPerBatch={6}
+          initialNumToRender={6}
+        />
+      )}
 
       {/* Detalje-/rediger-modal */}
       <Modal
@@ -837,15 +1026,16 @@ export default function EventsScreen() {
         animationType="slide"
         onRequestClose={() => setShowEventModal(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+        >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editMode ? "Rediger aktivitet" : "Aktivitet"}</Text>
               <TouchableOpacity
-                onPress={() => {
-                  setEditMode(false);
-                  setShowEventModal(false);
-                }}
+                onPress={() => { setEditMode(false); setShowEventModal(false); }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={styles.modalClose}>✕</Text>
@@ -854,7 +1044,7 @@ export default function EventsScreen() {
 
             {activeEvent ? (
               !editMode ? (
-                <View>
+                <ScrollView>
                   {activeEvent.image_url ? (
                     <Image source={{ uri: activeEvent.image_url }} style={styles.detailImage} />
                   ) : null}
@@ -880,30 +1070,25 @@ export default function EventsScreen() {
                         </Text>
                       </View>
 
-                      {/* Knapper afhængigt af status */}
                       {isApprovedMember ? (
                         <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
                           {!isRegistered ? (
                             <TouchableOpacity
-                              style={[
-                                styles.actionBtn,
-                                atCapacity ? styles.grayBtn : styles.blackBtn,
-                                { minWidth: 120, alignItems: "center" },
-                              ]}
+                              style={[styles.actionBtn, styles.blackBtn]}
                               onPress={joinEvent}
                               disabled={joining || atCapacity}
                             >
-                              <Text style={styles.smallBtnText}>
+                              <Text numberOfLines={1} style={styles.actionText}>
                                 {joining ? "Tilmeld..." : atCapacity ? "Fuldt" : "Tilmeld"}
                               </Text>
                             </TouchableOpacity>
                           ) : (
                             <TouchableOpacity
-                              style={[styles.actionBtn, styles.grayBtn, { minWidth: 120, alignItems: "center" }]}
+                              style={[styles.actionBtn, styles.grayBtn]}
                               onPress={leaveEvent}
                               disabled={leaving}
                             >
-                              <Text style={styles.smallBtnText}>
+                              <Text numberOfLines={1} style={styles.actionText}>
                                 {leaving ? "Afmelder..." : "Afmeld"}
                               </Text>
                             </TouchableOpacity>
@@ -946,28 +1131,67 @@ export default function EventsScreen() {
                     </View>
                   ) : null}
 
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                  {/* KNAPPER I BUNDEN – ÉN KOLONNE */}
+                  <View style={styles.buttonsRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.blackBtn]}
+                      onPress={() => {
+                        setShowEventModal(false);
+                        router.push({
+                          pathname: "/forening/[id]/images",
+                          params: { id: String(id), eventId: activeEvent.id },
+                        });
+                      }}
+                    >
+                      <Text numberOfLines={1} ellipsizeMode="tail" style={styles.actionText}>
+                        Billeder
+                      </Text>
+                    </TouchableOpacity>
+
+                    {(amAdmin || activeEvent.created_by === userId) && (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, hasPushed ? styles.grayBtn : styles.blackBtn]}
+                        onPress={handleSendPush}
+                        disabled={sendingPush || hasPushed}
+                      >
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={styles.actionText}>
+                          {sendingPush ? "Sender…" : hasPushed ? "Push sendt" : "Send push"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
                     {canEditEvent(activeEvent) && (
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.blackBtn]}
                         onPress={() => openEdit(activeEvent)}
                       >
-                        <Text style={styles.smallBtnText}>Rediger</Text>
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={styles.actionText}>
+                          Rediger
+                        </Text>
                       </TouchableOpacity>
                     )}
+
                     {canDeleteEvent(activeEvent) && (
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.deleteBtn]}
                         onPress={() => deleteEvent(activeEvent)}
                       >
-                        <Text style={styles.deleteBtnText}>Slet</Text>
+                        <Text numberOfLines={1} ellipsizeMode="tail" style={styles.actionText}>
+                          Slet
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                </View>
+
+                  {/* Lille push-statistik under knapperne */}
+                  {pushStats && (
+                    <Text style={[styles.sectionMuted, { marginBottom: 10 }]}>
+                      🔔 Push sendes til {pushStats.active_push_members} ud af {pushStats.total_members} medlemmer
+                    </Text>
+                  )}
+                </ScrollView>
               ) : (
-                // Redigeringsformular
-                <View>
+                <ScrollView>
                   <TextInput
                     style={styles.input}
                     value={editTitle}
@@ -991,37 +1215,21 @@ export default function EventsScreen() {
                     placeholderTextColor="#9aa0a6"
                   />
 
-                  <TouchableOpacity
-                    onPress={() => openPicker("edit", "start", "date")}
-                    style={styles.pickerBtn}
-                  >
+                  <TouchableOpacity onPress={() => openPicker("edit", "start", "date")} style={styles.pickerBtn}>
                     <Text style={styles.pickerLabel}>Startdato *</Text>
-                    <Text style={styles.pickerValue}>
-                      {editStart ? fmtDate(editStart) : "Vælg dato"}
-                    </Text>
+                    <Text style={styles.pickerValue}>{editStart ? fmtDate(editStart) : "Vælg dato"}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => openPicker("edit", "start", "time")}
-                    style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}
-                  >
+                  <TouchableOpacity onPress={() => openPicker("edit", "start", "time")} style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}>
                     <Text style={styles.smallBtnText}>
                       {editStart ? `Vælg starttid (nu: ${fmtTime(editStart)})` : "Vælg starttid"}
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={() => openPicker("edit", "end", "date")}
-                    style={styles.pickerBtn}
-                  >
+                  <TouchableOpacity onPress={() => openPicker("edit", "end", "date")} style={styles.pickerBtn}>
                     <Text style={styles.pickerLabel}>Slutdato *</Text>
-                    <Text style={styles.pickerValue}>
-                      {editEnd ? fmtDate(editEnd) : "Vælg dato"}
-                    </Text>
+                    <Text style={styles.pickerValue}>{editEnd ? fmtDate(editEnd) : "Vælg dato"}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => openPicker("edit", "end", "time")}
-                    style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}
-                  >
+                  <TouchableOpacity onPress={() => openPicker("edit", "end", "time")} style={[styles.smallBtn, styles.blackBtn, { marginTop: 6 }]}>
                     <Text style={styles.smallBtnText}>
                       {editEnd ? `Vælg sluttid (nu: ${fmtTime(editEnd)})` : "Vælg sluttid"}
                     </Text>
@@ -1051,38 +1259,39 @@ export default function EventsScreen() {
                     <Switch value={editAllowRegistration} onValueChange={setEditAllowRegistration} />
                   </View>
 
-                  <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                  {/* Ens brede knapper i én kolonne */}
+                  <View style={styles.buttonsRow}>
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.blackBtn, editSaving && { opacity: 0.7 }]}
                       onPress={saveEdit}
                       disabled={editSaving}
                     >
-                      <Text style={styles.smallBtnText}>{editSaving ? "Gemmer…" : "Gem"}</Text>
+                      <Text numberOfLines={1} style={styles.actionText}>
+                        {editSaving ? "Gemmer…" : "Gem"}
+                      </Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.grayBtn]}
                       onPress={() => setEditMode(false)}
                       disabled={editSaving}
                     >
-                      <Text style={styles.smallBtnText}>Annullér</Text>
+                      <Text numberOfLines={1} style={styles.actionText}>
+                        Annullér
+                      </Text>
                     </TouchableOpacity>
                   </View>
-                </View>
+                </ScrollView>
               )
             ) : (
               <Text style={styles.sectionMuted}>Indlæser…</Text>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* 🔹 ÉN fælles, centreret picker-modal (OK/Annullér) */}
-      <Modal
-        visible={pickerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelPicker}
-      >
+      {/* Fælles picker-modal */}
+      <Modal visible={pickerVisible} transparent animationType="fade" onRequestClose={cancelPicker}>
         <View style={styles.pickerBackdrop}>
           <View style={styles.pickerCard}>
             <Text style={styles.pickerTitle}>
@@ -1153,6 +1362,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#eef1f4",
   },
+  rowBg: {
+    backgroundColor: "#7c89961a",
+    borderWidth: 1,
+    borderColor: "#7c89968a",
+  },
+
   sectionBox: {
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
@@ -1244,8 +1459,8 @@ const styles = StyleSheet.create({
   cardImage: { width: "100%", height: 140, borderRadius: 10, marginBottom: 8, backgroundColor: "#f1f1f1" },
   imagePreview: { width: "100%", height: 160, borderRadius: 10, backgroundColor: "#f1f1f1", marginTop: 6 },
 
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center", padding: 18 },
-  modalCard: { width: "100%", maxWidth: 560, backgroundColor: "#FFFFFF", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#eef1f4" },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.90)", alignItems: "center", justifyContent: "center", padding: 18 },
+  modalCard: { height: "90%", width: "100%", maxWidth: 560, backgroundColor: "#FFFFFF", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#eef1f4" },
   modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   modalTitle: { fontSize: 12, fontWeight: "900", color: "#131921" },
   modalClose: { fontSize: 18, fontWeight: "900", color: "#131921" },
@@ -1255,11 +1470,49 @@ const styles = StyleSheet.create({
   detailRange: { fontSize: 11, color: "#000", opacity: 0.85, marginTop: 2 },
   detailMeta: { fontSize: 11, color: "#000", opacity: 0.85, marginTop: 2 },
 
-  actionBtn: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
-  deleteBtn: { marginTop: 10, backgroundColor: "#C62828" },
-  deleteBtnText: { color: "#fff", fontSize: 12, fontWeight: "800", textAlign: "center" },
+  // Ens brede knapper i én kolonne
+  buttonsRow: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  actionBtn: {
+    width: "100%",
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  actionText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  deleteBtn: { backgroundColor: "#C62828" },
 
-  /* Picker-modal: centreret og stor */
+  regHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  attRow: {
+    flexDirection: "row", alignItems: "center", paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#e9edf1",
+  },
+  attAvatar: { width: 34, height: 34, borderRadius: 17, marginRight: 10 },
+  attName: { fontSize: 12, fontWeight: "800", color: "#131921" },
+  attEmail: { fontSize: 11, color: "#000", opacity: 0.75 },
+
+  groupCard: {
+    marginTop: 12, marginHorizontal: 14, backgroundColor: "#FFFFFF",
+    borderRadius: 14, paddingBottom: 6, borderWidth: 1, borderColor: "#eef1f4",
+  },
+  groupHeader: {
+    backgroundColor: "#131921", borderTopLeftRadius: 14, borderTopRightRadius: 14,
+    paddingVertical: 8, paddingHorizontal: 12,
+  },
+  groupHeaderText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
+  /* Picker-modal */
   pickerBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -1277,30 +1530,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   pickerTitle: { fontSize: 14, fontWeight: "900", color: "#131921", marginBottom: 8, textAlign: "center" },
-  pickerInner: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-  },
-  pickerActions: {
-    marginTop: 8,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
+  pickerInner: { alignItems: "center", justifyContent: "center", paddingVertical: 8 },
+  pickerActions: { marginTop: 8, flexDirection: "row", justifyContent: "flex-end", gap: 8 },
   pActionBtn: { borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14 },
   pActionText: { color: "#fff", fontWeight: "800" },
-
-  /* Deltagere */
-  regHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  attRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e9edf1",
-  },
-  attAvatar: { width: 34, height: 34, borderRadius: 17, marginRight: 10 },
-  attName: { fontSize: 12, fontWeight: "800", color: "#131921" },
-  attEmail: { fontSize: 11, color: "#000", opacity: 0.75 },
 });

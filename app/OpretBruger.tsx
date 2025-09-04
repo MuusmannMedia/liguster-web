@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabase';
 
-// <--- DENNE LINJE FJERNER HEADEREN
+// Skjul header
 export const options = { headerShown: false };
 
 export default function OpretBruger() {
@@ -29,37 +29,44 @@ export default function OpretBruger() {
       return;
     }
 
+    // VIGTIGT: Fortæl Supabase at bekræftelseslinket skal åbne LoginScreen
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: 'ligusterapp://LoginScreen',
+      },
     });
 
     if (error) {
       Alert.alert('Fejl', error.message);
-    } else {
-      // Prøv at oprette bruger i users-tabellen (ikke kritisk hvis det fejler)
-      try {
-        const userId = data?.user?.id || data?.session?.user?.id;
-        const userEmail = data?.user?.email || data?.session?.user?.email;
-        if (userId && userEmail) {
-          // Tjek om brugeren allerede findes
-          const { data: existingUser } = await supabase
-            .from('users')
-            .select('id')
-            .eq('id', userId)
-            .single();
-          if (!existingUser) {
-            await supabase.from('users').insert([
-              { id: userId, email: userEmail }
-            ]);
-          }
-        }
-      } catch (err) {
-        // Ikke kritisk – vis bare succes
-      }
-      Alert.alert('Succes', 'Din bruger er oprettet! Tjek din email for at bekræfte.');
-      router.replace('/LoginScreen');
+      return;
     }
+
+    // (Best effort) Opret post i users-tabellen, hvis ikke findes
+    try {
+      const userId = data?.user?.id || data?.session?.user?.id;
+      const userEmail = data?.user?.email || data?.session?.user?.email;
+      if (userId && userEmail) {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', userId)
+          .single();
+
+        if (!existingUser) {
+          await supabase.from('users').insert([{ id: userId, email: userEmail }]);
+        }
+      }
+    } catch {
+      // Ignorer – sekundær
+    }
+
+    Alert.alert(
+      'Succes',
+      'Din bruger er oprettet! Tjek din email for at bekræfte, og log derefter ind.'
+    );
+    router.replace('/LoginScreen');
   };
 
   return (
@@ -70,7 +77,6 @@ export default function OpretBruger() {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-            {/* Tilbage-ikon øverst til venstre - nu til START */}
             <TouchableOpacity style={styles.backIcon} onPress={() => router.replace('/')}>
               <Text style={{ fontSize: 30, color: '#fff' }}>{'‹'}</Text>
             </TouchableOpacity>
@@ -79,6 +85,7 @@ export default function OpretBruger() {
             <Text style={styles.gdpr}>
               Vi gemmer kun din email for at kunne vise din profil. Vi deler den aldrig med andre.
             </Text>
+
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -96,6 +103,7 @@ export default function OpretBruger() {
               value={password}
               onChangeText={setPassword}
             />
+
             <TouchableOpacity style={styles.button} onPress={handleSignup}>
               <Text style={styles.buttonText}>OPRET BRUGER</Text>
             </TouchableOpacity>
@@ -115,7 +123,7 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     position: 'absolute',
-    top: 36,
+    top: 50,
     left: 16,
     zIndex: 99,
     width: 40,

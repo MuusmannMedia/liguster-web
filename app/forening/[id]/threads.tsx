@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
   iconDeleteText: { color: "#fff", fontWeight: "900", fontSize: 14, lineHeight: 14 },
 
   /* Modal */
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center", padding: 18 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.90)", alignItems: "center", justifyContent: "center", padding: 18 },
   threadModalCard: {
     width: "100%", maxWidth: 640, height: "86%", backgroundColor: "#fff", borderRadius: 16,
     borderWidth: 1, borderColor: "#e9edf1", overflow: "hidden",

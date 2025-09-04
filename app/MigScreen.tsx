@@ -1,5 +1,4 @@
 // app/MigScreen.tsx
-
 import { useNavigation } from '@react-navigation/native';
 import React, { useMemo, useState } from 'react';
 import {
@@ -24,34 +23,44 @@ import { supabase } from '../utils/supabase';
 
 const PLACEHOLDER = 'https://placehold.co/250x250?text=Profil';
 
-// ---------- Størrelser ----------
+/** ====== iPhone vs iPad størrelser (justér frit) ====== */
 const iPhoneSizes = {
   nameFont: 15,
   nameInputFont: 15,
-  buttonFont: 10,
+  buttonFont: 10,          // knap-tekst iPhone
   actionFont: 13,
-  emailFont: 12,
-  statusFont: 12,
+  emailFont: 10,
+  statusFont: 8,
   logoutFont: 14,
   avatarSize: 250,
-  cardWidth: '85%',
-  cardPadding: 36,
+  avatarMarginBottom: 20,  // <-- iPhone: afstand under avatar
+  cardWidth: '85%' as const,
+  cardPadding: 24,
+  buttonWidth: 110,
+  buttonHeight: 34,
+  sectionGapBelowButtons: 18,
+  sectionGapAboveBottomRow: 26,
 };
 
 const iPadSizes = {
   nameFont: 30,
   nameInputFont: 20,
-  buttonFont: 12,
+  buttonFont: 14,          // knap-tekst iPad
   actionFont: 15,
   emailFont: 14,
   statusFont: 14,
   logoutFont: 16,
   avatarSize: 460,
-  cardWidth: '65%',
+  avatarMarginBottom: 32,  // <-- iPad: afstand under avatar
+  cardWidth: '65%' as const,
   cardPadding: 46,
+  buttonWidth: 140,
+  buttonHeight: 46,
+  sectionGapBelowButtons: 24,
+  sectionGapAboveBottomRow: 30,
 };
 
-// ---------- Navn editor ----------
+/** ====== Navn‑editor ====== */
 const NameEditor = ({
   initialName,
   onSave,
@@ -65,7 +74,6 @@ const NameEditor = ({
 }) => {
   const [name, setName] = useState(initialName ?? '');
   const [editing, setEditing] = useState(false);
-
   const sizes = isTablet ? iPadSizes : iPhoneSizes;
 
   const handleSave = async () => {
@@ -80,11 +88,7 @@ const NameEditor = ({
           value={name}
           onChangeText={setName}
           placeholder="Indtast navn"
-          style={[
-            styles.name,
-            styles.nameInput,
-            { fontSize: sizes.nameInputFont, paddingVertical: 7 },
-          ]}
+          style={[styles.name, styles.nameInput, { fontSize: sizes.nameInputFont, paddingVertical: 7 }]}
           autoFocus
           returnKeyType="done"
           onSubmitEditing={handleSave}
@@ -120,7 +124,7 @@ const NameEditor = ({
   );
 };
 
-// ---------- Skærm ----------
+/** ====== Skærm ====== */
 export default function MigScreen() {
   const navigation = useNavigation<any>();
   const {
@@ -128,35 +132,60 @@ export default function MigScreen() {
     profile,
     loading,
     uploading,
-    savingName,
     handleLogout,
     pickAndUploadAvatar,
-    handleSaveName,
     setProfile,
   } = useProfile();
 
+  const [savingNameLocal, setSavingNameLocal] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const { width, height } = useWindowDimensions();
   const isTablet = useMemo(() => {
-    // @ts-ignore - iPad
+    // @ts-ignore iPad
     if (Platform.OS === 'ios' && Platform.isPad) return true;
     return Math.min(width, height) >= 768;
   }, [width, height]);
 
   const sizes = isTablet ? iPadSizes : iPhoneSizes;
 
+  // Gem navn i både public.users og auth metadata
+  const saveNameBoth = async (newName: string) => {
+    if (!user?.id) return false;
+    if (!newName) {
+      Alert.alert('Fejl', 'Navn må ikke være tomt.');
+      return false;
+    }
+    try {
+      setSavingNameLocal(true);
+      const [authRes, dbRes] = await Promise.allSettled([
+        supabase.auth.updateUser({ data: { full_name: newName } }),
+        supabase.from('users').update({ name: newName }).eq('id', user.id),
+      ]);
+
+      if (authRes.status === 'rejected') throw new Error(authRes.reason?.message || 'Kunne ikke opdatere auth‑profil.');
+      if (dbRes.status === 'rejected' || (dbRes.status === 'fulfilled' && (dbRes.value as any)?.error)) {
+        throw new Error((dbRes as any)?.value?.error?.message || 'Kunne ikke opdatere brugerprofil i databasen.');
+      }
+
+      setProfile((prev: any) => ({ ...prev, name: newName }));
+      return true;
+    } catch (e: any) {
+      Alert.alert('Fejl', e?.message ?? 'Kunne ikke gemme navnet.');
+      return false;
+    } finally {
+      setSavingNameLocal(false);
+    }
+  };
+
   const removeAvatar = async () => {
     if (!user?.id) return;
     try {
       setRemoving(true);
       const { error } = await supabase.from('users').update({ avatar_url: null }).eq('id', user.id);
-      if (error) {
-        Alert.alert('Fejl', 'Kunne ikke slette billede: ' + error.message);
-      } else {
-        setProfile((prev: any) => ({ ...prev, avatar_url: null }));
-      }
+      if (error) Alert.alert('Fejl', 'Kunne ikke slette billede: ' + error.message);
+      else setProfile((prev: any) => ({ ...prev, avatar_url: null }));
     } finally {
       setRemoving(false);
     }
@@ -166,10 +195,7 @@ export default function MigScreen() {
     Alert.alert(
       'Slet konto',
       'Du er nu ved at slette din konto. Dette kan ikke gøres om. Når din konto er slettet vil alt dit indhold forsvinde fra Liguster!',
-      [
-        { text: 'Annuller', style: 'cancel' },
-        { text: 'Slet', style: 'destructive', onPress: deleteAccount },
-      ],
+      [{ text: 'Annuller', style: 'cancel' }, { text: 'Slet', style: 'destructive', onPress: deleteAccount }],
     );
   };
 
@@ -177,39 +203,23 @@ export default function MigScreen() {
     if (!user) return;
     try {
       setDeleting(true);
-
-      // Hent access token til Authorization header
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) {
         Alert.alert('Fejl', 'Ingen gyldig session. Prøv at logge ind igen.');
         return;
       }
-
-      // Kald din Edge Function
-      // (URL’en er fast for projektet – brug POST uden body; funktionen finder selv current user)
       const url = 'https://gizskyfynvyvhnaqcyax.functions.supabase.co/delete-account';
       const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       });
-
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         throw new Error(`Delete function fejlede (${res.status}): ${txt || 'Ukendt fejl'}`);
       }
-
-      // Log ud i klienten
       await supabase.auth.signOut();
-
-      // Nulstil navigation til LoginScreen (route-navnet skal matche din navigator)
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'LoginScreen' }],
-      });
+      navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' }] });
     } catch (e: any) {
       Alert.alert('Fejl', e?.message ?? 'Kunne ikke slette kontoen.');
     } finally {
@@ -230,6 +240,12 @@ export default function MigScreen() {
     );
   }
 
+  const initialDisplayName =
+    profile?.name ??
+    // @ts-ignore
+    user?.user_metadata?.full_name ??
+    user?.email?.split('@')[0];
+
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -242,25 +258,41 @@ export default function MigScreen() {
             <View style={[styles.card, { width: sizes.cardWidth, padding: sizes.cardPadding }]}>
               <Image
                 source={imageSource}
-                style={[styles.avatar, { width: sizes.avatarSize, height: sizes.avatarSize }]}
+                style={[
+                  styles.avatar,
+                  {
+                    width: sizes.avatarSize,
+                    height: sizes.avatarSize,
+                    marginBottom: sizes.avatarMarginBottom, // <- forskellig pr. device
+                  },
+                ]}
                 resizeMode="cover"
               />
 
               {/* Knapper: RET BILLEDE + SLET BILLEDE */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginBottom: 22 }}>
-                <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploading} style={styles.textButton}>
-                  <Text style={[styles.textButtonTextUnderline, { fontSize: sizes.buttonFont }]}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: sizes.avatarSize,
+                  marginBottom: sizes.sectionGapBelowButtons,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={pickAndUploadAvatar}
+                  disabled={uploading}
+                  style={[styles.actionBox, { width: sizes.buttonWidth, height: sizes.buttonHeight }]}
+                >
+                  <Text style={[styles.actionBoxText, { fontSize: sizes.buttonFont }]}>
                     {uploading ? 'UPLOADER…' : 'RET BILLEDE'}
                   </Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity onPress={removeAvatar} disabled={removing} style={styles.textButton}>
-                  <Text
-                    style={[
-                      styles.textButtonTextUnderline,
-                      { color: '#B00020', fontSize: sizes.buttonFont },
-                    ]}
-                  >
+                <TouchableOpacity
+                  onPress={removeAvatar}
+                  disabled={removing}
+                  style={[styles.actionBox, { width: sizes.buttonWidth, height: sizes.buttonHeight }]}
+                >
+                  <Text style={[styles.actionBoxText, { fontSize: sizes.buttonFont }]}>
                     {removing ? 'SLETTER…' : 'SLET BILLEDE'}
                   </Text>
                 </TouchableOpacity>
@@ -269,29 +301,48 @@ export default function MigScreen() {
               {/* Navn + redigering */}
               <View style={{ alignItems: 'center', width: '100%', marginBottom: 12 }}>
                 <NameEditor
-                  initialName={profile?.name || user?.email?.split('@')[0]}
-                  onSave={handleSaveName}
-                  savingName={savingName}
+                  initialName={initialDisplayName}
+                  onSave={saveNameBoth}
+                  savingName={savingNameLocal}
                   isTablet={isTablet}
                 />
               </View>
 
-              <Text style={[styles.email, { fontSize: sizes.emailFont }]}>{user?.email ?? 'Ingen email'}</Text>
-              <Text style={[styles.status, { fontSize: sizes.statusFont }]}>
-                {user ? 'Du er logget ind' : 'Du er ikke logget ind'}
+              <Text style={[styles.email, { fontSize: sizes.emailFont }]}>
+                {user?.email ?? 'Ingen email'}
               </Text>
 
-              {/* Log ud */}
-              <TouchableOpacity onPress={handleLogout} disabled={deleting}>
-                <Text style={[styles.logout, { fontSize: sizes.logoutFont }]}>LOG UD</Text>
-              </TouchableOpacity>
-
-              {/* Slet konto */}
-              <TouchableOpacity onPress={confirmDeleteAccount} disabled={deleting} style={{ marginTop: 12 }}>
-                <Text style={[styles.logout, { fontSize: sizes.logoutFont }]}>
-                  {deleting ? 'SLÆTTER…' : 'SLET KONTO'}
-                </Text>
-              </TouchableOpacity>
+              {/* Nederste række: LOG UD + SLET KONTO */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: sizes.avatarSize,
+                  marginTop: sizes.sectionGapAboveBottomRow,
+                }}
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <TouchableOpacity
+                    onPress={handleLogout}
+                    disabled={deleting}
+                    style={[styles.actionBox, { width: sizes.buttonWidth, height: sizes.buttonHeight }]}
+                  >
+                    <Text style={[styles.actionBoxText, { fontSize: sizes.buttonFont }]}>LOG UD</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.status, { fontSize: sizes.statusFont }]}>
+                    {user ? 'Du er logget ind' : 'Du er ikke logget ind'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={confirmDeleteAccount}
+                  disabled={deleting}
+                  style={[styles.actionBox, { width: sizes.buttonWidth, height: sizes.buttonHeight }]}
+                >
+                  <Text style={[styles.actionBoxText, { fontSize: sizes.buttonFont }]}>
+                    {deleting ? 'SLETTER…' : 'SLET KONTO'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </TouchableWithoutFeedback>
@@ -301,7 +352,7 @@ export default function MigScreen() {
   );
 }
 
-// ---------- Styles ----------
+/** ====== Styles (device‑uafhængige) ====== */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#7C8996' },
   centerArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 95 },
@@ -317,25 +368,11 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   avatar: {
-    borderRadius: 16,
-    marginBottom: 8,
+    borderRadius: 8,
     borderWidth: 0,
     borderColor: '#E8ECF1',
   },
-  textButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-    alignSelf: 'center',
-    minHeight: 20,
-  },
-  textButtonTextUnderline: {
-    color: '#567',
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    textDecorationLine: 'underline',
-  },
+
   name: {
     fontWeight: '700',
     color: '#2A2D34',
@@ -357,7 +394,21 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     textDecorationLine: 'underline',
   },
-  email: { color: '#6B7280', marginBottom: 20, textAlign: 'center' },
-  status: { color: '#2A2D34', opacity: 0.7, marginBottom: 20, textAlign: 'center' },
-  logout: { fontWeight: 'bold', color: 'red', textDecorationLine: 'underline' },
+  email: { color: '#6B7280', marginTop: 10, textAlign: 'center' },
+  status: { color: '#2A2D34', opacity: 0.7, marginTop: 4, textAlign: 'center' },
+
+  actionBox: {
+    backgroundColor: '#131921',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBoxText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center', // fontSize sættes dynamisk via sizes.buttonFont
+  },
+
+  textButton: { marginTop: 4 },
+  textButtonTextUnderline: { textDecorationLine: 'underline', fontWeight: 'bold' },
 });

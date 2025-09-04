@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { supabase } from '../utils/supabase';
@@ -27,7 +28,6 @@ type Message = {
   text: string;
   post_id: string | null;
   created_at: string;
-  // valgfrit: posts?: { overskrift?: string } | null;
 };
 
 export default function ChatScreen() {
@@ -58,7 +58,6 @@ export default function ChatScreen() {
     const run = async () => {
       setLoading(true);
 
-      // Hent beskeder for tråden
       const { data: msgs, error } = await supabase
         .from('messages')
         .select('id,thread_id,sender_id,receiver_id,text,post_id,created_at,posts!left(overskrift)')
@@ -74,10 +73,8 @@ export default function ChatScreen() {
         const rows = (msgs || []) as any[];
         setMessages(rows);
 
-        // Titel (prøv via join først, ellers fetch posts)
-        let title: string | undefined =
-          rows.find((m) => m.posts?.overskrift)?.posts?.overskrift;
-
+        // Titel
+        let title: string | undefined = rows.find((m) => m.posts?.overskrift)?.posts?.overskrift;
         if (!title) {
           const realPostId = postId || rows[0]?.post_id;
           if (realPostId) {
@@ -91,7 +88,7 @@ export default function ChatScreen() {
         }
         setPostTitle(title || 'UKENDT OPSLAG');
 
-        // Avatars + emails til begge parter
+        // Avatars + emails
         const uniqIds = Array.from(
           new Set<string>(
             rows
@@ -132,7 +129,7 @@ export default function ChatScreen() {
     };
   }, [threadId, postId, userId, otherUserId]);
 
-  // Realtime: lyt kun på nye rækker i den specifikke tråd
+  // Realtime kun for denne tråd
   useEffect(() => {
     if (!threadId) return;
 
@@ -144,13 +141,22 @@ export default function ChatScreen() {
         (payload) => {
           const row = payload.new as Message;
           setMessages((prev) => {
-            // Undgå dubletter (kan ske hvis vi både indsætter lokalt og modtager realtime)
             if (prev.some((m) => m.id === row.id)) return prev;
             const next = [...prev, row].sort(
               (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
             );
             return next;
           });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'messages', filter: `thread_id=eq.${threadId}` },
+        (payload) => {
+          const deletedId = (payload.old as any)?.id;
+          if (deletedId) {
+            setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+          }
         }
       )
       .subscribe();
@@ -169,7 +175,6 @@ export default function ChatScreen() {
     const text = input.trim();
     if (!text || !userId || !threadId || !otherUserId) return;
 
-    // 1) Optimistisk besked (vises med det samme)
     const tempId = `temp-${Date.now()}`;
     const tempMsg: Message = {
       id: tempId,
@@ -183,7 +188,6 @@ export default function ChatScreen() {
     setMessages((prev) => [...prev, tempMsg]);
     setInput('');
 
-    // 2) Skriv til DB og få den rigtige række retur
     const { data: inserted, error } = await supabase
       .from('messages')
       .insert({
@@ -197,23 +201,45 @@ export default function ChatScreen() {
       .single();
 
     if (error || !inserted) {
-      // Rul tilbage hvis det fejler
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       Alert.alert('Fejl', error?.message ?? 'Kunne ikke sende beskeden.');
       return;
     }
 
-    // 3) Erstat den midlertidige med den rigtige række
     setMessages((prev) => {
-      // Hvis realtime allerede nåede at tilføje den rigtige, så fjern temp
       if (prev.some((m) => m.id === inserted.id)) {
         return prev.filter((m) => m.id !== tempId);
       }
       return prev.map((m) => (m.id === tempId ? inserted : m));
     });
 
-    // 4) Scroll efter succes
     setTimeout(() => flatListRef.current?.scrollToEnd?.({ animated: true }), 120);
+  };
+
+  const handleLongPressDelete = (message: Message) => {
+    if (!userId) return;
+    if (message.sender_id !== userId) return; // må kun slette egne beskeder
+
+    Alert.alert(
+      'Slet besked?',
+      'Denne handling kan ikke fortrydes.',
+      [
+        { text: 'Annuller', style: 'cancel' },
+        {
+          text: 'Slet',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.from('messages').delete().eq('id', message.id);
+            if (error) {
+              Alert.alert('Fejl', error.message);
+              return;
+            }
+            setMessages((prev) => prev.filter((m) => m.id !== message.id));
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const getInitial = (uid: string | null) => {
@@ -235,7 +261,7 @@ export default function ChatScreen() {
   // ----------- RENDER -----------
   return (
     <View style={styles.root}>
-      {/* Topbar som de andre sider */}
+      {/* Topbar */}
       <View style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -251,7 +277,6 @@ export default function ChatScreen() {
           </Text>
         </View>
 
-        {/* tom spacer for symmetri */}
         <View style={{ width: 34 }} />
       </View>
 
@@ -265,46 +290,61 @@ export default function ChatScreen() {
             <Text style={{ color: '#fff', fontSize: 18 }}>Indlæser...</Text>
           </View>
         ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item: any) => String(item.id)}
-            contentContainerStyle={{ paddingBottom: 18, paddingHorizontal: 10, paddingTop: 18 }}
-            renderItem={({ item }: { item: Message }) => {
-              const isMe = item.sender_id === userId;
-              return (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'flex-end',
-                    justifyContent: isMe ? 'flex-end' : 'flex-start',
-                    marginBottom: 14,
-                  }}
-                >
-                  {!isMe && <AvatarView uid={item.sender_id} />}
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item: any) => String(item.id)}
+              contentContainerStyle={{ paddingBottom: 18, paddingTop: 12 }}
+              renderItem={({ item }: { item: Message }) => {
+                const isMe = item.sender_id === userId;
+                return (
                   <View
                     style={[
-                      styles.bubble,
-                      isMe ? styles.bubbleRight : styles.bubbleLeft,
-                      { alignSelf: isMe ? 'flex-end' : 'flex-start' },
+                      styles.row,
+                      isMe ? styles.rowRight : styles.rowLeft,
                     ]}
                   >
-                    <Text style={[styles.bubbleText, isMe && { color: '#fff' }]}>{item.text}</Text>
-                    <Text style={styles.time}>
-                      {new Date(item.created_at).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
+                    {!isMe && <AvatarView uid={item.sender_id} />}
+
+                    <View style={styles.bubbleWrap}>
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        delayLongPress={350}
+                        onLongPress={() => handleLongPressDelete(item)}
+                        style={[
+                          styles.bubble,
+                          isMe ? styles.bubbleRight : styles.bubbleLeft,
+                        ]}
+                      >
+                        <Text
+                          style={[styles.bubbleText, isMe && { color: '#fff' }]}
+                        >
+                          {item.text}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.time,
+                          isMe ? styles.timeRight : styles.timeLeft,
+                        ]}
+                      >
+                        {new Date(item.created_at).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                    </View>
+
+                    {isMe && userId && <AvatarView uid={userId} />}
                   </View>
-                  {isMe && userId && <AvatarView uid={userId} />}
-                </View>
-              );
-            }}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd?.({ animated: true })}
-            onScrollBeginDrag={() => Keyboard.dismiss()}
-            keyboardShouldPersistTaps="handled"
-          />
+                );
+              }}
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd?.({ animated: true })}
+              onScrollBeginDrag={() => Keyboard.dismiss()}
+              keyboardShouldPersistTaps="handled"
+            />
+          </TouchableWithoutFeedback>
         )}
 
         <View style={styles.inputRow}>
@@ -369,43 +409,60 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    letterSpacing: 0,
     textAlign: 'center',
     textTransform: 'uppercase',
     paddingHorizontal: 2,
     flexWrap: 'wrap',
   },
 
-  /* Beskeder */
+  /* Rækker */
+  row: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  rowLeft: { justifyContent: 'flex-start' },
+  rowRight: { justifyContent: 'flex-end' },
+
+  /* Container for boble + tid (styrer max bredde) */
+  bubbleWrap: {
+    maxWidth: '76%',   // justér 72–80% efter smag
+    flexShrink: 1,
+  },
+
+  /* Boble */
   bubble: {
-    maxWidth: '80%',
-    paddingVertical: 13,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 18,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 7,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
-    position: 'relative',
   },
   bubbleRight: { backgroundColor: '#131921' },
   bubbleLeft: { backgroundColor: '#fff' },
+
   bubbleText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#222',
-    marginBottom: 2,
-    letterSpacing: 0.25,
-    lineHeight: 17,
-  },
-  time: {
-    alignSelf: 'flex-end',
-    fontSize: 11,
-    color: '#a1a1a1',
-    marginTop: 3,
-    fontWeight: '400',
+    lineHeight: 20,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
 
+  time: {
+    fontSize: 11,
+    color: '#a1a1a1',
+    marginTop: 4,
+  },
+  timeLeft: { alignSelf: 'flex-start', marginLeft: 6 },
+  timeRight: { alignSelf: 'flex-end', marginRight: 6 },
+
+  /* Avatar */
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -430,7 +487,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#131921',
     paddingHorizontal: 12,
-    paddingVertical: 15,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   input: {
@@ -442,10 +499,8 @@ const styles = StyleSheet.create({
     marginRight: 9,
     minHeight: 44,
     color: '#1e2330',
-    marginBottom: 4,
     textAlignVertical: 'top',
     maxHeight: 120,
-    marginTop: 5,
   },
   sendBtn: {
     paddingVertical: 0,

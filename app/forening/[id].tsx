@@ -1,8 +1,10 @@
 // app/forening/[id].tsx
 import { decode } from "base64-arraybuffer";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+// Fjernet lucide-importen og bruger PNG-ikon
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,12 +18,15 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions
+  useWindowDimensions,
 } from "react-native";
 
 import { useSession } from "../../hooks/useSession";
 import { Forening } from "../../types/forening";
 import { supabase } from "../../utils/supabase";
+
+// HVIDT MEDLEMS-IKON (PNG)
+const MembersIcon = require("../../assets/icons/members_white_24.png");
 
 /* ---------- Typer ---------- */
 type MedlemsRow = {
@@ -44,23 +49,36 @@ type ThreadRow = {
   created_by: string;
 };
 
-type MsgRow = { id: string; user_id: string; text: string; created_at: string };
-
-type UiMsg = {
-  id: string;
-  text: string;
-  created_at: string;
-  user: { id: string; name: string | null; email: string | null; avatar_url: string | null };
-};
-
-/** --------- Events (aktiviteter) – til preview ---------- */
 type EventRow = {
   id: string;
-  title: string;
-  start_at: string; // ISO
-  end_at: string;   // ISO
+  title: string | null;
+  start_at: string;
+  end_at: string | null;
   location: string | null;
   price: number | null;
+};
+
+type EventFull = {
+  id: string;
+  forening_id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  start_at: string;
+  end_at: string;
+  price: number | null;
+  capacity: number | null;
+  allow_registration: boolean | null;
+  image_url: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+type EventImagePreview = {
+  id: number;
+  image_url: string;
+  event_id: string;
+  created_at?: string;
 };
 
 /* ---------- Helpers ---------- */
@@ -84,28 +102,59 @@ const resolveAvatarUrl = (maybePath?: string | null): string | null => {
   return data?.publicUrl || null;
 };
 
-function formatDateRange(startISO: string, endISO: string) {
+function formatDateRange(startISO: string, endISO?: string | null) {
   const s = new Date(startISO);
-  const e = new Date(endISO);
-  const sameDay =
+  const e = endISO ? new Date(endISO) : null;
+  const dkDate = (d: Date) =>
+    d.toLocaleDateString("da-DK", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const dkTime = (d: Date) =>
+    d.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" });
+  if (!e) return `${dkDate(s)} kl. ${dkTime(s)}`;
+  const same =
     s.getFullYear() === e.getFullYear() &&
     s.getMonth() === e.getMonth() &&
     s.getDate() === e.getDate();
-
-  const dkDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" });
-  const dkTime = (d: Date) =>
-    d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-
-  if (sameDay) {
-    return `${dkDate(s)} kl. ${dkTime(s)}–${dkTime(e)}`;
-  }
-  return `${dkDate(s)} ${dkTime(s)} – ${dkDate(e)} ${dkTime(e)}`;
+  return same
+    ? `${dkDate(s)} kl. ${dkTime(s)}–${dkTime(e)}`
+    : `${dkDate(s)} ${dkTime(s)} – ${dkDate(e)} ${dkTime(e)}`;
 }
+
+/* ---------- Kalender utils ---------- */
+const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+const toKey = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const buildMonthGrid = (base: Date) => {
+  const first = startOfMonth(base);
+  const last = endOfMonth(base);
+  const firstWeekday = (first.getDay() + 6) % 7;
+  const daysInMonth = last.getDate();
+  const cells: Date[] = [];
+  for (let i = 0; i < firstWeekday; i++) {
+    const d = new Date(first);
+    d.setDate(first.getDate() - (firstWeekday - i));
+    cells.push(d);
+  }
+  for (let d = 1; d <= daysInMonth; d++)
+    cells.push(new Date(base.getFullYear(), base.getMonth(), d));
+  while (cells.length < 42) {
+    const lastCell = cells[cells.length - 1];
+    const next = new Date(lastCell);
+    next.setDate(lastCell.getDate() + 1);
+    cells.push(next);
+  }
+  const weeks: Date[][] = [];
+  for (let i = 0; i < 6; i++) weeks.push(cells.slice(i * 7, i * 7 + 7));
+  return weeks;
+};
 
 /* ---------- Component ---------- */
 export default function ForeningDetaljeScreen() {
-  const { id } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ id: string }>();
+  const foreningId = Array.isArray(params.id) ? params.id[0] : params.id;
+
   const router = useRouter();
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
@@ -139,22 +188,55 @@ export default function ForeningDetaljeScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
+  // lifecycle guards
+  const isMounted = useRef(true);
+  const navigatedAway = useRef(false);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   /* ----- Hent forening ----- */
   const fetchForening = useCallback(async () => {
-    if (!id) return;
-    const { data, error } = await supabase.from("foreninger").select("*").eq("id", id).single();
-    if (error) console.error("Kunne ikke hente forening:", error);
-    setForening(data ?? null);
-  }, [id]);
+    if (!foreningId || navigatedAway.current) return;
+    const { data, error } = await supabase
+      .from("foreninger")
+      .select("*")
+      .eq("id", foreningId)
+      .maybeSingle();
+
+    if (!isMounted.current || navigatedAway.current) return;
+
+    if (error) {
+      console.error("Kunne ikke hente forening:", error);
+      setForening(null);
+      return;
+    }
+
+    if (!data) {
+      // foreningen findes ikke → gå pænt tilbage
+      navigatedAway.current = true;
+      try {
+        router.canGoBack() ? router.back() : router.replace("/foreninger");
+      } catch {
+        router.replace("/foreninger");
+      }
+      return;
+    }
+
+    setForening(data as Forening);
+  }, [foreningId, router]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!foreningId) return;
     (async () => {
       setLoading(true);
       await fetchForening();
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     })();
-  }, [id, fetchForening]);
+  }, [foreningId, fetchForening]);
 
   // Sync redigeringsfelter
   useEffect(() => {
@@ -166,13 +248,15 @@ export default function ForeningDetaljeScreen() {
 
   /* ----- Hent medlemmer ----- */
   const fetchMedlemmer = useCallback(async () => {
-    if (!id) return;
+    if (!foreningId || navigatedAway.current) return;
     const { data, error } = await supabase
       .from("foreningsmedlemmer")
       .select(
         "user_id, rolle, status, users:users!foreningsmedlemmer_user_id_fkey (name, username, avatar_url, email)"
       )
-      .eq("forening_id", id);
+      .eq("forening_id", foreningId);
+
+    if (!isMounted.current || navigatedAway.current) return;
 
     if (error) {
       console.error("Kunne ikke hente medlemmer:", error?.message || error);
@@ -183,16 +267,19 @@ export default function ForeningDetaljeScreen() {
 
     const mapped = (data as MedlemsRow[]).map((m) => ({
       ...m,
-      users: { ...m.users, avatar_url: resolveAvatarUrl(m.users?.avatar_url ?? null) },
+      users: {
+        ...m.users,
+        avatar_url: resolveAvatarUrl(m.users?.avatar_url ?? null),
+      },
     }));
 
     setMedlemmer(mapped);
     setAntalApproved(mapped.filter((m) => m.status === "approved").length);
-  }, [id]);
+  }, [foreningId]);
 
   useEffect(() => {
-    fetchMedlemmer();
-  }, [id, fetchMedlemmer]);
+    if (foreningId) fetchMedlemmer();
+  }, [foreningId, fetchMedlemmer]);
 
   /* ----- Derived ----- */
   const myRow = useMemo(
@@ -208,49 +295,39 @@ export default function ForeningDetaljeScreen() {
   const admins = approved.filter((m) => isAdmin(m, forening?.oprettet_af));
   const regulars = approved.filter((m) => !isAdmin(m, forening?.oprettet_af));
 
-  /* 🔹 Visningsnavne pr. user_id */
-  const nameByUserId = useMemo(() => {
-    const map: Record<string, string> = {};
-    approved.forEach((m) => (map[m.user_id] = getDisplayName(m)));
-    return map;
-  }, [approved]);
-
-  const getNameFromId = (uid: string) => nameByUserId[uid] || "Ukendt";
-
-  /* ==========================
-     SAMTALER – PREVIEW
-     ========================== */
+  /* ========================== SAMTALER – PREVIEW ========================== */
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const fetchThreads = useCallback(async () => {
-    if (!id) return;
+    if (!foreningId || navigatedAway.current) return;
     const { data, error } = await supabase
       .from("forening_threads")
       .select("id, forening_id, title, created_at, created_by")
-      .eq("forening_id", id)
+      .eq("forening_id", foreningId)
       .order("created_at", { ascending: false });
+    if (!isMounted.current || navigatedAway.current) return;
     if (error) {
       console.error("Kunne ikke hente tråde:", error.message);
       setThreads([]);
       return;
     }
     setThreads((data || []) as ThreadRow[]);
-  }, [id]);
+  }, [foreningId]);
 
   useEffect(() => {
-    fetchThreads();
-  }, [id, fetchThreads]);
+    if (foreningId) fetchThreads();
+  }, [foreningId, fetchThreads]);
 
-  /* ==========================
-     AKTIVITETER – PREVIEW
-     ========================== */
+  /* ========================== AKTIVITETER – PREVIEW (liste) ========================== */
   const [events, setEvents] = useState<EventRow[]>([]);
   const fetchEvents = useCallback(async () => {
-    if (!id) return;
+    if (!foreningId || navigatedAway.current) return;
     const { data, error } = await supabase
       .from("forening_events")
       .select("id, title, start_at, end_at, location, price")
-      .eq("forening_id", id)
+      .eq("forening_id", foreningId)
       .order("start_at", { ascending: false });
+
+    if (!isMounted.current || navigatedAway.current) return;
 
     if (error) {
       console.error("Kunne ikke hente aktiviteter:", error.message);
@@ -258,23 +335,167 @@ export default function ForeningDetaljeScreen() {
       return;
     }
     setEvents((data || []) as EventRow[]);
-  }, [id]);
+  }, [foreningId]);
 
   useEffect(() => {
-    fetchEvents();
-  }, [id, fetchEvents]);
+    if (foreningId) fetchEvents();
+  }, [foreningId, fetchEvents]);
+
+  /* ========================== BILLEDER – PREVIEW (3 seneste) ========================== */
+  const [imagesPreview, setImagesPreview] = useState<EventImagePreview[]>([]);
+  const fetchImagesPreview = useCallback(async () => {
+    if (!foreningId || navigatedAway.current) return;
+
+    const { data: latestEvents } = await supabase
+      .from("forening_events")
+      .select("id")
+      .eq("forening_id", foreningId)
+      .order("start_at", { ascending: false })
+      .limit(12);
+
+    if (!isMounted.current || navigatedAway.current) return;
+
+    const ids = (latestEvents || []).map((e: any) => e.id);
+    if (ids.length === 0) {
+      setImagesPreview([]);
+      return;
+    }
+
+    const { data: imgs, error } = await supabase
+      .from("event_images")
+      .select("id, image_url, event_id, created_at")
+      .in("event_id", ids)
+      .order("created_at", { ascending: false })
+      .limit(3);
+
+    if (!isMounted.current || navigatedAway.current) return;
+
+    if (error) {
+      console.warn("Kunne ikke hente billede-preview:", error.message);
+      setImagesPreview([]);
+      return;
+    }
+    setImagesPreview((imgs || []) as EventImagePreview[]);
+  }, [foreningId]);
+
+  /* ---------- KALENDER ---------- */
+  const [monthCursor, setMonthCursor] = useState(new Date());
+  const [calEvents, setCalEvents] = useState<EventRow[]>([]);
+  const [dayModalVisible, setDayModalVisible] = useState(false);
+  const [dayModalDate, setDayModalDate] = useState<string | null>(null);
+
+  const [calWidth, setCalWidth] = useState(0);
+  const cellSize = calWidth > 0 ? Math.floor(calWidth / 7) : 0;
+  const calGridHeight = cellSize * 6;
+
+  const scrollRef = useRef<ScrollView>(null);
+  const lastY = useRef(0);
+  const onScroll = (e: any) => {
+    lastY.current = e.nativeEvent.contentOffset?.y ?? 0;
+  };
+
+  const changeMonth = (delta: -1 | 1) => {
+    scrollRef.current?.scrollTo({ y: lastY.current, animated: false });
+    setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: lastY.current, animated: false });
+    });
+  };
+
+  const fetchCalendarEvents = useCallback(
+    async (base: Date) => {
+      if (!foreningId || navigatedAway.current) return;
+      const first = startOfMonth(base);
+      const last = endOfMonth(base);
+      const lastEnd = new Date(last);
+      lastEnd.setHours(23, 59, 59, 999);
+
+      const { data, error } = await supabase
+        .from("forening_events")
+        .select("id, title, start_at, end_at, location, price")
+        .eq("forening_id", foreningId)
+        .gte("start_at", first.toISOString())
+        .lte("start_at", lastEnd.toISOString())
+        .order("start_at", { ascending: true });
+
+      if (!isMounted.current || navigatedAway.current) return;
+
+      if (error) {
+        console.warn("Kunne ikke hente kalender-events:", error.message);
+        setCalEvents([]);
+        return;
+      }
+      setCalEvents((data || []) as EventRow[]);
+    },
+    [foreningId]
+  );
+
+  useEffect(() => {
+    if (foreningId) fetchCalendarEvents(monthCursor);
+  }, [foreningId, monthCursor, fetchCalendarEvents]);
+
+  const dayToEvents = useMemo(() => {
+    const m = new Map<string, EventRow[]>();
+    calEvents.forEach((a) => {
+      const d = new Date(a.start_at);
+      const key = toKey(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+      const arr = m.get(key) ?? [];
+      arr.push(a);
+      m.set(key, arr);
+    });
+    return m;
+  }, [calEvents]);
+
+  /* ---------- Aktivitets-detaljer fra kalender ---------- */
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<EventFull | null>(null);
+  const [loadingEvent, setLoadingEvent] = useState(false);
+
+  const openEventFromCalendar = async (eventId: string) => {
+    try {
+      setLoadingEvent(true);
+      const { data, error } = await supabase
+        .from("forening_events")
+        .select(
+          "id, forening_id, title, description, location, start_at, end_at, price, capacity, allow_registration, image_url, created_by, created_at"
+        )
+        .eq("id", eventId)
+        .maybeSingle();
+      if (!isMounted.current) return;
+      if (error) throw error;
+      setActiveEvent((data || null) as EventFull | null);
+      setShowEventModal(true);
+    } catch (e: any) {
+      Alert.alert("Fejl", e?.message ?? "Kunne ikke indlæse aktiviteten.");
+    } finally {
+      if (isMounted.current) setLoadingEvent(false);
+    }
+  };
 
   /* ---------- FOKUS-REFRESH + PULL-TO-REFRESH ---------- */
-
   const [refreshing, setRefreshing] = useState(false);
-
   const refreshAll = useCallback(async () => {
+    if (navigatedAway.current) return;
     setRefreshing(true);
-    await Promise.all([fetchForening(), fetchMedlemmer(), fetchThreads(), fetchEvents()]);
-    setRefreshing(false);
-  }, [fetchForening, fetchMedlemmer, fetchThreads, fetchEvents]);
+    await Promise.all([
+      fetchForening(),
+      fetchMedlemmer(),
+      fetchThreads(),
+      fetchEvents(),
+      fetchCalendarEvents(monthCursor),
+      fetchImagesPreview(),
+    ]);
+    if (isMounted.current) setRefreshing(false);
+  }, [
+    fetchForening,
+    fetchMedlemmer,
+    fetchThreads,
+    fetchEvents,
+    fetchCalendarEvents,
+    monthCursor,
+    fetchImagesPreview,
+  ]);
 
-  // 🔁 Hver gang siden bliver fokuseret (navigeret tilbage til), henter vi alt igen
   useFocusEffect(
     useCallback(() => {
       refreshAll();
@@ -282,61 +503,65 @@ export default function ForeningDetaljeScreen() {
     }, [refreshAll])
   );
 
-  /* ----- Upload foreningsbillede ----- */
+  /* ----- Upload foreningsbillede (header) ----- */
   const handleUploadHeader = async () => {
-    if (!isOwner) return;
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      base64: true,
-    });
-    if (res.canceled) return;
-
-    setUploading(true);
-    const file = res.assets?.[0];
-    if (!file?.base64) {
-      setUploading(false);
-      Alert.alert("Kunne ikke hente billedet.");
-      return;
-    }
-
-    const ext = (file.uri.split(".").pop() || "jpg").toLowerCase();
-    const fileName = `${id}_${Date.now()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("foreningsbilleder")
-      .upload(fileName, decode(file.base64), {
-        contentType: file.type || "image/jpeg",
-        upsert: true,
+    if (!isOwner || !foreningId) return;
+    try {
+      const pick = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
       });
+      if (pick.canceled) return;
 
-    if (uploadError) {
-      setUploading(false);
-      Alert.alert("Fejl ved upload: " + uploadError.message);
-      return;
+      const asset = pick.assets?.[0];
+      if (!asset?.uri) return;
+
+      // Nedskalér & komprimér (1600px bredde, JPEG ~60%)
+      const img = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1600 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      if (!img.base64) {
+        Alert.alert("Fejl", "Kunne ikke læse billedet.");
+        return;
+      }
+
+      setUploading(true);
+
+      const fileName = `${foreningId}_${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("foreningsbilleder")
+        .upload(fileName, decode(img.base64), {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from("foreningsbilleder")
+        .getPublicUrl(fileName);
+      const publicUrl = data.publicUrl;
+
+      const { error: updateErr } = await supabase
+        .from("foreninger")
+        .update({ billede_url: publicUrl })
+        .eq("id", foreningId);
+
+      if (updateErr) throw updateErr;
+
+      await refreshAll();
+    } catch (err: any) {
+      Alert.alert("Fejl", err?.message ?? "Kunne ikke uploade billedet.");
+    } finally {
+      if (isMounted.current) setUploading(false);
     }
-
-    const { data } = supabase.storage.from("foreningsbilleder").getPublicUrl(fileName);
-    const publicUrl = data.publicUrl;
-
-    const { error: updateErr } = await supabase
-      .from("foreninger")
-      .update({ billede_url: publicUrl })
-      .eq("id", id);
-
-    if (updateErr) {
-      setUploading(false);
-      Alert.alert("Kunne ikke gemme billedets URL: " + updateErr.message);
-      return;
-    }
-
-    await refreshAll();
-    setUploading(false);
   };
 
   /* ----- Gem/Annuller redigering ----- */
   const handleSaveEdit = async () => {
-    if (!isOwner || !id) return;
+    if (!isOwner || !foreningId) return;
     if (!editNavn.trim() || !editSted.trim() || !editBeskrivelse.trim()) {
       Alert.alert("Udfyld venligst alle felter.");
       return;
@@ -344,85 +569,137 @@ export default function ForeningDetaljeScreen() {
     setSaving(true);
     const { error } = await supabase
       .from("foreninger")
-      .update({ navn: editNavn.trim(), sted: editSted.trim(), beskrivelse: editBeskrivelse.trim() })
-      .eq("id", id);
+      .update({
+        navn: editNavn.trim(),
+        sted: editSted.trim(),
+        beskrivelse: editBeskrivelse.trim(),
+      })
+      .eq("id", foreningId);
     setSaving(false);
-    if (error) return Alert.alert("Fejl", "Kunne ikke gemme ændringer: " + error.message);
+    if (error) {
+      Alert.alert("Fejl", "Kunne ikke gemme ændringer: " + error.message);
+      return;
+    }
     await refreshAll();
     setEditMode(false);
   };
 
   /* ----- Medlemsrettigheder (admin) ----- */
-
-  // Hvem må fjerne hvem?
   const canRemove = (target: MedlemsRow) => {
-    if (!amAdmin) return false; // ikke admin = ingen rettigheder
-    if (target.user_id === forening?.oprettet_af) return false; // ejeren kan aldrig fjernes
+    if (!amAdmin) return false;
+    if (target.user_id === forening?.oprettet_af) return false;
     const targetIsAdmin = isAdmin(target, forening?.oprettet_af);
-    if (!isOwner && targetIsAdmin) return false; // kun ejeren må fjerne andre admins
+    if (!isOwner && targetIsAdmin) return false;
     return true;
   };
 
   const removeMember = async (target: MedlemsRow) => {
-    if (!id) return;
-    if (!canRemove(target)) return;
+    if (!foreningId || !canRemove(target)) return;
     const name = getDisplayName(target);
-    Alert.alert(
-      "Fjern medlem",
-      `Vil du fjerne ${name} fra foreningen?`,
-      [
-        { text: "Annuller", style: "cancel" },
-        {
-          text: "Fjern",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setBusyId(target.user_id);
-              const { error } = await supabase
-                .from("foreningsmedlemmer")
-                .delete()
-                .eq("forening_id", id as string)
-                .eq("user_id", target.user_id);
-              if (error) throw error;
-              await refreshAll();
-              if (selectedMember?.user_id === target.user_id) {
-                setSelectedMember(null);
-              }
-            } catch (e: any) {
-              Alert.alert("Fejl", e?.message ?? "Kunne ikke fjerne medlemmet.");
-            } finally {
-              setBusyId(null);
-            }
-          },
+    Alert.alert("Fjern medlem", `Vil du fjerne ${name} fra foreningen?`, [
+      { text: "Annuller", style: "cancel" },
+      {
+        text: "Fjern",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setBusyId(target.user_id);
+            const { error } = await supabase
+              .from("foreningsmedlemmer")
+              .delete()
+              .eq("forening_id", foreningId)
+              .eq("user_id", target.user_id);
+            if (error) throw error;
+            await refreshAll();
+            if (selectedMember?.user_id === target.user_id)
+              setSelectedMember(null);
+          } catch (e: any) {
+            Alert.alert("Fejl", e?.message ?? "Kunne ikke fjerne medlemmet.");
+          } finally {
+            setBusyId(null);
+          }
         },
-      ]
-    );
+      },
+    ]);
+  };
+
+  const approveMember = async (target: MedlemsRow) => {
+    if (!amAdmin || !foreningId) return;
+    try {
+      setBusyId(target.user_id);
+      const { error } = await supabase
+        .from("foreningsmedlemmer")
+        .update({ status: "approved" })
+        .eq("forening_id", foreningId)
+        .eq("user_id", target.user_id);
+      if (error) throw error;
+      await refreshAll();
+    } catch (e: any) {
+      Alert.alert("Fejl", e?.message ?? "Kunne ikke godkende.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const declineMember = async (target: MedlemsRow) => {
+    if (!amAdmin || !foreningId) return;
+    try {
+      setBusyId(target.user_id);
+      const { error } = await supabase
+        .from("foreningsmedlemmer")
+        .update({ status: "declined" })
+        .eq("forening_id", foreningId)
+        .eq("user_id", target.user_id);
+      if (error) throw error;
+      await refreshAll();
+    } catch (e: any) {
+      Alert.alert("Fejl", e?.message ?? "Kunne ikke afvise.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   /* ----- Bliv medlem / Forlad / Slet forening ----- */
   const handleBlivMedlem = async () => {
-    if (!userId || !id) return;
+    if (!userId || !foreningId) return;
     const { error } = await supabase
       .from("foreningsmedlemmer")
-      .insert([{ forening_id: id as string, user_id: userId, rolle: "medlem", status: "pending" }]);
-    if (error) return Alert.alert("Fejl", "Kunne ikke sende anmodning: " + error.message);
+      .insert([
+        { forening_id: foreningId, user_id: userId, rolle: "medlem", status: "pending" },
+      ]);
+    if (error) {
+      Alert.alert("Fejl", "Kunne ikke sende anmodning: " + error.message);
+      return;
+    }
     Alert.alert("Din anmodning er sendt og afventer godkendelse.");
     await refreshAll();
   };
 
-  const handleForlad = async () => {
-    if (!userId || !id) return;
-    const { error } = await supabase
-      .from("foreningsmedlemmer")
-      .delete()
-      .eq("forening_id", id)
-      .eq("user_id", userId);
-    if (error) return Alert.alert("Fejl", "Kunne ikke forlade foreningen: " + error.message);
-    await refreshAll();
+  const confirmForlad = () => {
+    Alert.alert("Afslut medlemskab", "Er du sikker på, at du vil fortsætte?", [
+      { text: "Annuller", style: "cancel" },
+      {
+        text: "Ja, afslut",
+        style: "destructive",
+        onPress: async () => {
+          if (!userId || !foreningId) return;
+          const { error } = await supabase
+            .from("foreningsmedlemmer")
+            .delete()
+            .eq("forening_id", foreningId)
+            .eq("user_id", userId);
+          if (error) {
+            Alert.alert("Fejl", "Kunne ikke forlade foreningen: " + error.message);
+            return;
+          }
+          await refreshAll();
+        },
+      },
+    ]);
   };
 
   const handleDeleteForening = async () => {
-    if (!isOwner || !id) return;
+    if (!isOwner || !foreningId) return;
     Alert.alert(
       "Slet forening",
       "Er du sikker på, at du vil slette foreningen? Denne handling kan ikke fortrydes.",
@@ -432,12 +709,24 @@ export default function ForeningDetaljeScreen() {
           text: "Slet",
           style: "destructive",
           onPress: async () => {
-            const { error } = await supabase.from("foreninger").delete().eq("id", id);
+            const { error } = await supabase
+              .from("foreninger")
+              .delete()
+              .eq("id", foreningId);
             if (error) {
-              Alert.alert("Fejl", "Kunne ikke slette foreningen: " + error.message);
+              Alert.alert(
+                "Fejl",
+                "Kunne ikke slette foreningen: " + error.message
+              );
               return;
             }
-            router.back();
+            // undgå efterfølgende fetch på en slettet id
+            navigatedAway.current = true;
+            try {
+              router.canGoBack() ? router.back() : router.replace("/foreninger");
+            } catch {
+              router.replace("/foreninger");
+            }
           },
         },
       ]
@@ -445,6 +734,13 @@ export default function ForeningDetaljeScreen() {
   };
 
   /* ----- UI ----- */
+  if (!foreningId) {
+    return (
+      <View style={styles.center}>
+        <Text>Forening ikke fundet.</Text>
+      </View>
+    );
+  }
   if (loading || !forening) {
     return (
       <View style={styles.center}>
@@ -455,40 +751,51 @@ export default function ForeningDetaljeScreen() {
 
   const top3Threads = threads.slice(0, 3);
   const top3Events = events.slice(0, 3);
+  const monthLabel = monthCursor.toLocaleDateString("da-DK", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <>
       <ScrollView
+        ref={scrollRef}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         style={{ flex: 1, backgroundColor: "#7C8996" }}
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor="#131921" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshAll}
+            tintColor="#131921"
+          />
         }
       >
         {/* Topbar */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Text style={styles.backBtnText}>‹</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.counter}
-            onPress={() => {
-              setSelectedMember(null);
-              setShowMembers(true);
-            }}
-          >
-            <Text style={styles.counterIcon}>👥</Text>
-            <Text style={styles.counterNum}>{antalApproved}</Text>
-          </TouchableOpacity>
+          {/* Tæller fjernet fra topbaren */}
+          <View style={{ width: 34 }} />
         </View>
 
         {/* Kort (Forening info) */}
         <View style={styles.card}>
           {forening.billede_url ? (
-            <Image source={{ uri: forening.billede_url }} style={[styles.hero, isTablet && styles.heroTablet]} />
+            <Image
+              source={{ uri: forening.billede_url }}
+              style={[styles.hero, isTablet && styles.heroTablet]}
+            />
           ) : (
-            <View style={[styles.hero, styles.heroPlaceholder, isTablet && styles.heroTablet]}>
+            <View
+              style={[styles.hero, styles.heroPlaceholder, isTablet && styles.heroTablet]}
+            >
               <Text style={{ color: "#222", fontSize: 12 }}>Intet billede</Text>
             </View>
           )}
@@ -499,7 +806,6 @@ export default function ForeningDetaljeScreen() {
               value={editNavn}
               onChangeText={setEditNavn}
               placeholder="Foreningens navn"
-              placeholderTextColor="#777"
             />
           ) : (
             <Text style={styles.title}>{forening.navn}</Text>
@@ -507,11 +813,10 @@ export default function ForeningDetaljeScreen() {
 
           {isOwner && editMode ? (
             <TextInput
-              style={[styles.input]}
+              style={styles.input}
               value={editSted}
               onChangeText={setEditSted}
               placeholder="Sted"
-              placeholderTextColor="#777"
             />
           ) : (
             <Text style={styles.place}>{forening.sted}</Text>
@@ -523,7 +828,6 @@ export default function ForeningDetaljeScreen() {
               value={editBeskrivelse}
               onChangeText={setEditBeskrivelse}
               placeholder="Beskrivelse"
-              placeholderTextColor="#777"
               multiline
             />
           ) : !!forening.beskrivelse ? (
@@ -533,15 +837,28 @@ export default function ForeningDetaljeScreen() {
           {isOwner && (
             <View style={styles.editRow}>
               {!editMode ? (
-                <TouchableOpacity style={[styles.smallActionBtn, styles.editBtn]} onPress={() => setEditMode(true)}>
+                <TouchableOpacity
+                  style={[styles.smallActionBtn, styles.editBtn]}
+                  onPress={() => setEditMode(true)}
+                >
                   <Text style={styles.smallActionText}>Rediger</Text>
                 </TouchableOpacity>
               ) : (
                 <>
-                  <TouchableOpacity style={[styles.smallActionBtn, styles.saveBtn]} onPress={handleSaveEdit} disabled={saving}>
-                    <Text style={styles.smallActionText}>{saving ? "Gemmer…" : "Gem"}</Text>
+                  <TouchableOpacity
+                    style={[styles.smallActionBtn, styles.saveBtn]}
+                    onPress={handleSaveEdit}
+                    disabled={saving}
+                  >
+                    <Text style={styles.smallActionText}>
+                      {saving ? "Gemmer…" : "Gem"}
+                    </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.smallActionBtn, styles.cancelBtn]} onPress={() => setEditMode(false)} disabled={saving}>
+                  <TouchableOpacity
+                    style={[styles.smallActionBtn, styles.cancelBtn]}
+                    onPress={() => setEditMode(false)}
+                    disabled={saving}
+                  >
                     <Text style={styles.smallActionText}>Annullér</Text>
                   </TouchableOpacity>
                 </>
@@ -549,28 +866,60 @@ export default function ForeningDetaljeScreen() {
             </View>
           )}
 
-          {isApproved ? null : isPending ? (
-            <View style={[styles.bigBtn, { backgroundColor: "#9aa0a6" }]}>
-              <Text style={styles.bigBtnText}>Afventer godkendelse…</Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={[styles.bigBtn, styles.join]} onPress={handleBlivMedlem}>
-              <Text style={styles.bigBtnText}>Bliv medlem</Text>
-            </TouchableOpacity>
-          )}
+          {!isApproved ? (
+            isPending ? (
+              <View style={[styles.bigBtn, { backgroundColor: "#9aa0a6" }]}>
+                <Text style={styles.bigBtnText}>Afventer godkendelse…</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.bigBtn, styles.join]}
+                onPress={handleBlivMedlem}
+              >
+                <Text style={styles.bigBtnText}>Bliv medlem</Text>
+              </TouchableOpacity>
+            )
+          ) : null}
         </View>
 
         {/* Medlemmer (preview) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MEDLEMMER</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>MEDLEMMER</Text>
+
+            <TouchableOpacity
+              style={styles.counterSmall}
+              onPress={() => {
+                setSelectedMember(null);
+                setShowMembers(true);
+              }}
+            >
+              <Image
+                source={MembersIcon}
+                style={{ width: 22, height: 22, marginRight: 6, tintColor: "#fff" }}
+                resizeMode="contain"
+              />
+              <Text style={styles.counterNum}>{antalApproved}</Text>
+            </TouchableOpacity>
+          </View>
+
           <FlatList
             data={approved}
             keyExtractor={(item) => item.user_id}
             horizontal
             renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => { setSelectedMember(item); setShowMembers(true); }} style={styles.memberBox}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedMember(item);
+                  setShowMembers(true);
+                }}
+                style={styles.memberBox}
+              >
                 {item.users?.avatar_url ? (
-                  <Image source={{ uri: item.users.avatar_url }} style={styles.memberAvatar} />
+                  <Image
+                    source={{ uri: item.users.avatar_url }}
+                    style={styles.memberAvatar}
+                  />
                 ) : (
                   <View style={styles.memberAvatarPlaceholder}>
                     <Text style={{ color: "#131921", fontSize: 12 }}>?</Text>
@@ -579,28 +928,43 @@ export default function ForeningDetaljeScreen() {
                 <Text style={styles.memberName}>{getDisplayName(item)}</Text>
               </TouchableOpacity>
             )}
-            ListEmptyComponent={<Text style={{ color: "#000", margin: 8, fontSize: 12 }}>Ingen medlemmer endnu.</Text>}
+            ListEmptyComponent={
+              <Text style={{ color: "#000", margin: 8, fontSize: 12 }}>
+                Ingen medlemmer endnu.
+              </Text>
+            }
             contentContainerStyle={{ paddingVertical: 6, paddingLeft: 12 }}
             showsHorizontalScrollIndicator={false}
           />
         </View>
 
-        {/* Samtaler – PREVIEW (3 seneste). Hele kortet klikbart */}
+        {/* Samtaler – PREVIEW */}
         <TouchableOpacity
           style={styles.section}
           activeOpacity={0.9}
-          onPress={() => router.push(`/forening/${id}/threads`)}
+          onPress={() => router.push(`/forening/${foreningId}/threads`)}
         >
-          <Text style={styles.sectionTitle}>SAMTALER</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>SAMTALER</Text>
+          </View>
           {top3Threads.length === 0 ? (
             <Text style={styles.sectionMuted}>Ingen tråde endnu.</Text>
           ) : (
-            top3Threads.map((t) => (
-              <View key={t.id} style={styles.threadItemRow}>
+            top3Threads.map((t, idx) => (
+              <View
+                key={t.id}
+                style={[styles.threadItemRow, idx === 0 && styles.noTopBorder]}
+              >
                 <View style={styles.threadItemLeft}>
                   <Text style={styles.threadTitle}>{t.title}</Text>
                   <Text style={styles.threadMeta}>
-                    Oprettet af {getNameFromId(t.created_by)} · {new Date(t.created_at).toLocaleDateString()}
+                    Oprettet af{" "}
+                    {approved.find((m) => m.user_id === t.created_by)
+                      ? getDisplayName(
+                          approved.find((m) => m.user_id === t.created_by)!
+                        )
+                      : "Ukendt"}{" "}
+                    · {new Date(t.created_at).toLocaleDateString("da-DK")}
                   </Text>
                 </View>
               </View>
@@ -613,23 +977,34 @@ export default function ForeningDetaljeScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Aktiviteter – PREVIEW (3 seneste). Hele kortet klikbart */}
+        {/* Aktiviteter – PREVIEW (liste) */}
         <TouchableOpacity
           style={styles.section}
           activeOpacity={0.9}
-          onPress={() => router.push(`/forening/${id}/events`)}
+          onPress={() => router.push(`/forening/${foreningId}/events`)}
         >
-          <Text style={styles.sectionTitle}>AKTIVITETER</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>AKTIVITETER</Text>
+          </View>
           {top3Events.length === 0 ? (
             <Text style={styles.sectionMuted}>Ingen aktiviteter endnu.</Text>
           ) : (
-            top3Events.map((ev) => (
-              <View key={ev.id} style={styles.eventRow}>
+            top3Events.map((ev, idx) => (
+              <View
+                key={ev.id}
+                style={[styles.eventRow, idx === 0 && styles.noTopBorder]}
+              >
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.eventTitle}>{ev.title}</Text>
-                  <Text style={styles.eventMeta}>{formatDateRange(ev.start_at, ev.end_at)}</Text>
-                  {!!ev.location && <Text style={styles.eventMeta}>📍 {ev.location}</Text>}
-                  {!!ev.price && <Text style={styles.eventMeta}>Pris: {ev.price} kr.</Text>}
+                  <Text style={styles.eventTitle}>{ev.title || "Aktivitet"}</Text>
+                  <Text style={styles.eventMeta}>
+                    {formatDateRange(ev.start_at, ev.end_at)}
+                  </Text>
+                  {!!ev.location && (
+                    <Text style={styles.eventMeta}>📍 {ev.location}</Text>
+                  )}
+                  {!!ev.price && (
+                    <Text style={styles.eventMeta}>Pris: {ev.price} kr.</Text>
+                  )}
                 </View>
               </View>
             ))
@@ -641,14 +1016,118 @@ export default function ForeningDetaljeScreen() {
           )}
         </TouchableOpacity>
 
-        {/* ===== BUNDSEKTION: handlinger ===== */}
+        {/* ---------- AKTIVITETER – KALENDER ---------- */}
+        <View
+          style={styles.section}
+          onLayout={(e) =>
+            setCalWidth(Math.max(0, Math.floor(e.nativeEvent.layout.width)))
+          }
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>AKTIVITETER (KALENDER)</Text>
+          </View>
+
+          <View style={styles.calHeader}>
+            <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.calNavBtn}>
+              <Text style={styles.calNavText}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.calMonthLabel}>
+              {monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}
+            </Text>
+            <TouchableOpacity onPress={() => changeMonth(1)} style={styles.calNavBtn}>
+              <Text style={styles.calNavText}>›</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.calWeekdays}>
+            {["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"].map((w) => (
+              <Text key={w} style={styles.calWeekdayText}>
+                {w}
+              </Text>
+            ))}
+          </View>
+          <View style={[styles.calGrid, { height: calGridHeight }]}>
+            {buildMonthGrid(monthCursor).map((week, wi) => (
+              <View key={wi} style={[styles.calRow, { height: cellSize }]}>
+                {week.map((d, di) => {
+                  const key = toKey(
+                    new Date(d.getFullYear(), d.getMonth(), d.getDate())
+                  );
+                  const inThisMonth = d.getMonth() === monthCursor.getMonth();
+                  const list = dayToEvents.get(key) || [];
+                  const hasActs = list.length > 0;
+                  return (
+                    <TouchableOpacity
+                      key={`${wi}-${di}`}
+                      onPress={() => {
+                        if (!hasActs) return;
+                        setDayModalDate(key);
+                        setDayModalVisible(true);
+                      }}
+                      activeOpacity={hasActs ? 0.8 : 1}
+                      style={[
+                        styles.calCell,
+                        { width: cellSize, height: cellSize },
+                        !inThisMonth && styles.calCellDim,
+                        hasActs && styles.calCellActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.calDayNum,
+                          !inThisMonth && { opacity: 0.45 },
+                          hasActs && { color: "#fff", fontWeight: "800" },
+                        ]}
+                      >
+                        {d.getDate()}
+                      </Text>
+                      {hasActs && <View style={styles.calDot} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ---------- BILLEDER – PREVIEW + LINK ---------- */}
+        <TouchableOpacity
+          style={styles.section}
+          activeOpacity={0.9}
+          onPress={() => router.push(`/forening/${foreningId}/images`)}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionHeaderText}>BILLEDER</Text>
+          </View>
+          {imagesPreview.length === 0 ? (
+            <Text style={styles.sectionMuted}>
+              Ingen billeder endnu. Tryk for at åbne billeder.
+            </Text>
+          ) : (
+            <View style={styles.imagesPreviewRow}>
+              {imagesPreview.map((img) => (
+                <Image
+                  key={img.id}
+                  source={{ uri: img.image_url }}
+                  style={styles.imagesPreviewThumb}
+                />
+              ))}
+            </View>
+          )}
+          <Text style={[styles.sectionMuted, { marginTop: 6 }]}>
+            Tryk for at se alle billeder.
+          </Text>
+        </TouchableOpacity>
+
+        {/* Bund-handlinger */}
         <View style={styles.bottomActions}>
           {isApproved && (
-            <TouchableOpacity style={[styles.actionBtn, styles.leaveAction]} onPress={handleForlad}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.leaveAction]}
+              onPress={confirmForlad}
+            >
               <Text style={styles.actionBtnText}>Afslut medlemskab</Text>
             </TouchableOpacity>
           )}
-
           {isOwner && (
             <>
               <TouchableOpacity
@@ -656,10 +1135,14 @@ export default function ForeningDetaljeScreen() {
                 onPress={handleUploadHeader}
                 disabled={uploading}
               >
-                <Text style={styles.actionBtnText}>{uploading ? "Uploader..." : "Upload foreningsbillede"}</Text>
+                <Text style={styles.actionBtnText}>
+                  {uploading ? "Uploader..." : "Upload foreningsbillede"}
+                </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.actionBtn, styles.deleteAction]} onPress={handleDeleteForening}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.deleteAction]}
+                onPress={handleDeleteForening}
+              >
                 <Text style={styles.deleteActionText}>Slet forening</Text>
               </TouchableOpacity>
             </>
@@ -667,8 +1150,13 @@ export default function ForeningDetaljeScreen() {
         </View>
       </ScrollView>
 
-      {/* Medlems-dialog */}
-      <Modal visible={showMembers} transparent animationType="fade" onRequestClose={() => setShowMembers(false)}>
+      {/* Medlemmer - modal */}
+      <Modal
+        visible={showMembers}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMembers(false)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             {selectedMember ? (
@@ -681,162 +1169,197 @@ export default function ForeningDetaljeScreen() {
                   }
                   style={styles.profileAvatar}
                 />
-                <Text style={styles.profileName}>{getDisplayName(selectedMember)}</Text>
-                <Text style={styles.roleBadge}>
-                  {isAdmin(selectedMember, forening?.oprettet_af) ? "ADMIN" : "MEDLEM"}
+                <Text style={styles.profileName}>
+                  {getDisplayName(selectedMember)}
                 </Text>
-
+                <Text style={styles.roleBadge}>
+                  {isAdmin(selectedMember, forening?.oprettet_af)
+                    ? "ADMIN"
+                    : "MEDLEM"}
+                </Text>
                 {canRemove(selectedMember) && (
                   <TouchableOpacity
                     onPress={() => removeMember(selectedMember)}
-                    style={[styles.smallActionBtn, { backgroundColor: "#C62828", marginTop: 6 }]}
+                    style={[
+                      styles.smallActionBtn,
+                      { backgroundColor: "#C62828", marginTop: 6 },
+                    ]}
                     disabled={busyId === selectedMember.user_id}
                   >
                     <Text style={styles.smallActionText}>
-                      {busyId === selectedMember.user_id ? "Fjerner…" : "Fjern medlem"}
+                      {busyId === selectedMember.user_id
+                        ? "Fjerner…"
+                        : "Fjern medlem"}
                     </Text>
                   </TouchableOpacity>
                 )}
-
-                <TouchableOpacity onPress={() => setShowMembers(false)} style={styles.modalCloseBottom}>
+                <TouchableOpacity
+                  onPress={() => setShowMembers(false)}
+                  style={styles.modalCloseBottom}
+                >
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={{ maxHeight: 480 }}>
+              <View style={{ maxHeight: 520 }}>
                 <ScrollView>
-                  {amAdmin && (
-                    <>
-                      <Text style={[styles.listHeader, { marginTop: 4 }]}>Afventer godkendelse</Text>
-                      {pending.length === 0 ? (
-                        <Text style={styles.emptyLine}>Ingen anmodninger.</Text>
-                      ) : (
-                        pending.map((m) => {
-                          const busy = busyId === m.user_id;
-                          return (
-                            <View key={`pending-${m.user_id}`} style={styles.row}>
-                              {m.users?.avatar_url ? (
-                                <Image source={{ uri: m.users.avatar_url }} style={styles.rowAvatar} />
-                              ) : (
-                                <View style={[styles.rowAvatar, styles.rowAvatarPh]}>
-                                  <Text>?</Text>
-                                </View>
-                              )}
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.rowName}>{getDisplayName(m)}</Text>
-                                <Text style={styles.rowEmail}>{m.users?.email || "Ingen email"}</Text>
-                              </View>
-                              <View style={{ flexDirection: "row", gap: 6 }}>
-                                <TouchableOpacity
-                                  onPress={async () => {
-                                    setBusyId(m.user_id);
-                                    await supabase
-                                      .from("foreningsmedlemmer")
-                                      .update({ status: "approved" })
-                                      .eq("forening_id", id)
-                                      .eq("user_id", m.user_id);
-                                    await refreshAll();
-                                    setBusyId(null);
-                                  }}
-                                  disabled={busy}
-                                  style={[styles.smallBtn, styles.approveBtn, busy && styles.btnDisabled]}
-                                >
-                                  <Text style={styles.smallBtnText}>{busy ? "..." : "Godkend"}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={async () => {
-                                    setBusyId(m.user_id);
-                                    await supabase
-                                      .from("foreningsmedlemmer")
-                                      .update({ status: "declined" })
-                                      .eq("forening_id", id)
-                                      .eq("user_id", m.user_id);
-                                    await refreshAll();
-                                    setBusyId(null);
-                                  }}
-                                  disabled={busy}
-                                  style={[styles.smallBtn, styles.rejectBtn, busy && styles.btnDisabled]}
-                                >
-                                  <Text style={styles.smallBtnText}>{busy ? "..." : "Afvis"}</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          );
-                        })
-                      )}
-                    </>
-                  )}
+                  <Text style={styles.listHeader}>AFVENTER GODKENDELSE</Text>
+                  {pending.length === 0 ? (
+                    <Text style={styles.emptyLine}>Ingen afventer.</Text>
+                  ) : null}
+                  {pending.length > 0 &&
+                    pending.map((m) => (
+                      <TouchableOpacity
+                        key={`p-${m.user_id}`}
+                        onPress={() => setSelectedMember(m)}
+                        activeOpacity={0.9}
+                        style={styles.row}
+                      >
+                        {m.users?.avatar_url ? (
+                          <Image
+                            source={{ uri: m.users.avatar_url }}
+                            style={styles.rowAvatar}
+                          />
+                        ) : (
+                          <View style={[styles.rowAvatar, styles.rowAvatarPh]}>
+                            <Text style={{ color: "#131921", fontWeight: "900" }}>
+                              {(getDisplayName(m)[0] || "U").toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.rowName}>{getDisplayName(m)}</Text>
+                          {!!m.users?.email && (
+                            <Text style={styles.rowEmail}>{m.users.email}</Text>
+                          )}
+                          <Text style={styles.roleUnderName}>PENDING</Text>
+                        </View>
+                        {amAdmin && (
+                          <View style={{ flexDirection: "row" }}>
+                            <TouchableOpacity
+                              onPress={() => approveMember(m)}
+                              style={[
+                                styles.smallBtn,
+                                styles.approveBtn,
+                                busyId === m.user_id && styles.btnDisabled,
+                              ]}
+                              disabled={busyId === m.user_id}
+                            >
+                              <Text style={styles.smallBtnText}>
+                                {busyId === m.user_id ? "…" : "Godkend"}
+                              </Text>
+                            </TouchableOpacity>
+                            <View style={{ width: 8 }} />
+                            <TouchableOpacity
+                              onPress={() => declineMember(m)}
+                              style={[
+                                styles.smallBtn,
+                                styles.rejectBtn,
+                                busyId === m.user_id && styles.btnDisabled,
+                              ]}
+                              disabled={busyId === m.user_id}
+                            >
+                              <Text style={styles.smallBtnText}>Afvis</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
 
-                  <Text style={[styles.listHeader, { marginTop: amAdmin ? 12 : 4 }]}>Administratorer</Text>
+                  <Text style={styles.listHeader}>ADMINISTRATORER</Text>
                   {admins.length === 0 ? (
                     <Text style={styles.emptyLine}>Ingen administratorer.</Text>
                   ) : (
-                    admins.map((m) => {
-                      const busy = busyId === m.user_id;
-                      const showRemove = canRemove(m);
-                      return (
-                        <View key={`admin-${m.user_id}`} style={styles.row}>
-                          {m.users?.avatar_url ? (
-                            <Image source={{ uri: m.users.avatar_url }} style={styles.rowAvatar} />
-                          ) : (
-                            <View style={[styles.rowAvatar, styles.rowAvatarPh]}>
-                              <Text>?</Text>
-                            </View>
+                    admins.map((m) => (
+                      <TouchableOpacity
+                        key={`a-${m.user_id}`}
+                        onPress={() => setSelectedMember(m)}
+                        activeOpacity={0.9}
+                        style={styles.row}
+                      >
+                        {m.users?.avatar_url ? (
+                          <Image
+                            source={{ uri: m.users.avatar_url }}
+                            style={styles.rowAvatar}
+                          />
+                        ) : (
+                          <View style={[styles.rowAvatar, styles.rowAvatarPh]}>
+                            <Text style={{ color: "#131921", fontWeight: "900" }}>
+                              {(getDisplayName(m)[0] || "U").toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.rowName}>{getDisplayName(m)}</Text>
+                          {!!m.users?.email && (
+                            <Text style={styles.rowEmail}>{m.users.email}</Text>
                           )}
-                          <TouchableOpacity style={{ flex: 1 }} onPress={() => setSelectedMember(m)}>
-                            <Text style={styles.rowName}>{getDisplayName(m)}</Text>
-                            <Text style={styles.roleUnderName}>ADMIN</Text>
-                          </TouchableOpacity>
-                          {showRemove && (
-                            <TouchableOpacity
-                              onPress={() => removeMember(m)}
-                              disabled={busy}
-                              style={[styles.smallBtn, styles.deleteMiniBtn, busy && styles.btnDisabled]}
-                            >
-                              <Text style={styles.smallBtnText}>{busy ? "…" : "Fjern"}</Text>
-                            </TouchableOpacity>
-                          )}
+                          <Text style={styles.roleUnderName}>ADMIN</Text>
                         </View>
-                      );
-                    })
+                        {canRemove(m) && (
+                          <TouchableOpacity
+                            onPress={() => removeMember(m)}
+                            style={[styles.smallBtn, styles.deleteMiniBtn]}
+                            disabled={busyId === m.user_id}
+                          >
+                            <Text style={styles.smallBtnText}>
+                              {busyId === m.user_id ? "…" : "Fjern"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </TouchableOpacity>
+                    ))
                   )}
 
-                  <Text style={[styles.listHeader, { marginTop: 10 }]}>Medlemmer</Text>
+                  <Text style={styles.listHeader}>MEDLEMMER</Text>
                   {regulars.length === 0 ? (
                     <Text style={styles.emptyLine}>Ingen medlemmer.</Text>
                   ) : (
-                    regulars.map((m) => {
-                      const busy = busyId === m.user_id;
-                      const showRemove = canRemove(m);
-                      return (
-                        <View key={`mem-${m.user_id}`} style={styles.row}>
-                          {m.users?.avatar_url ? (
-                            <Image source={{ uri: m.users.avatar_url }} style={styles.rowAvatar} />
-                          ) : (
-                            <View style={[styles.rowAvatar, styles.rowAvatarPh]}>
-                              <Text>?</Text>
-                            </View>
+                    regulars.map((m) => (
+                      <TouchableOpacity
+                        key={`m-${m.user_id}`}
+                        onPress={() => setSelectedMember(m)}
+                        activeOpacity={0.9}
+                        style={styles.row}
+                      >
+                        {m.users?.avatar_url ? (
+                          <Image
+                            source={{ uri: m.users.avatar_url }}
+                            style={styles.rowAvatar}
+                          />
+                        ) : (
+                          <View style={[styles.rowAvatar, styles.rowAvatarPh]}>
+                            <Text style={{ color: "#131921", fontWeight: "900" }}>
+                              {(getDisplayName(m)[0] || "U").toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.rowName}>{getDisplayName(m)}</Text>
+                          {!!m.users?.email && (
+                            <Text style={styles.rowEmail}>{m.users.email}</Text>
                           )}
-                          <TouchableOpacity style={{ flex: 1 }} onPress={() => setSelectedMember(m)}>
-                            <Text style={styles.rowName}>{getDisplayName(m)}</Text>
-                            <Text style={styles.roleUnderName}>MEDLEM</Text>
-                          </TouchableOpacity>
-                          {showRemove && (
-                            <TouchableOpacity
-                              onPress={() => removeMember(m)}
-                              disabled={busy}
-                              style={[styles.smallBtn, styles.deleteMiniBtn, busy && styles.btnDisabled]}
-                            >
-                              <Text style={styles.smallBtnText}>{busy ? "…" : "Fjern"}</Text>
-                            </TouchableOpacity>
-                          )}
+                          <Text style={styles.roleUnderName}>MEDLEM</Text>
                         </View>
-                      );
-                    })
+                        {canRemove(m) && (
+                          <TouchableOpacity
+                            onPress={() => removeMember(m)}
+                            style={[styles.smallBtn, styles.deleteMiniBtn]}
+                            disabled={busyId === m.user_id}
+                          >
+                            <Text style={styles.smallBtnText}>
+                              {busyId === m.user_id ? "…" : "Fjern"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </TouchableOpacity>
+                    ))
                   )}
                 </ScrollView>
-
-                <TouchableOpacity onPress={() => setShowMembers(false)} style={styles.modalCloseBottom}>
+                <TouchableOpacity
+                  onPress={() => setShowMembers(false)}
+                  style={styles.modalCloseBottom}
+                >
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
@@ -845,9 +1368,136 @@ export default function ForeningDetaljeScreen() {
         </View>
       </Modal>
 
-      {/* (Valgfri gammel tråd-modal beholdt) */}
-      <Modal visible={false} transparent animationType="slide" onRequestClose={() => {}}>
-        {/* skjult – beholdt hvis du vil genbruge */}
+      {/* Dagens aktiviteter (fra kalender) */}
+      <Modal
+        visible={dayModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDayModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 480, position: "relative" }]}>
+            <TouchableOpacity
+              onPress={() => setDayModalVisible(false)}
+              style={styles.blackCloseSquare}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Text style={styles.blackCloseSquareText}>✕</Text>
+            </TouchableOpacity>
+            <View style={[styles.calHeader, { marginTop: 0 }]}>
+              <Text style={styles.sectionTitle}>
+                {dayModalDate
+                  ? new Date(dayModalDate).toLocaleDateString("da-DK", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    })
+                  : "Aktiviteter"}
+              </Text>
+            </View>
+            {dayModalDate ? (
+              (() => {
+                const list = dayToEvents.get(dayModalDate) || [];
+                if (list.length === 0) {
+                  return (
+                    <Text style={{ color: "#000", opacity: 0.7, paddingVertical: 6 }}>
+                      Ingen aktiviteter denne dag.
+                    </Text>
+                  );
+                }
+                return (
+                  <View>
+                    {list.map((a) => (
+                      <View
+                        key={a.id}
+                        style={{
+                          paddingVertical: 8,
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: "#e8eef2",
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.eventTitle}>{a.title || "Aktivitet"}</Text>
+                          <Text style={styles.eventMeta}>
+                            {formatDateRange(a.start_at, a.end_at)}
+                          </Text>
+                          {!!a.location && (
+                            <Text style={styles.eventMeta}>📍 {a.location}</Text>
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setDayModalVisible(false);
+                            openEventFromCalendar(a.id);
+                          }}
+                          style={[styles.smallBtn, styles.uploadAction]}
+                        >
+                          <Text style={styles.smallBtnText}>ÅBN KORT</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Aktivitet – detaljer */}
+      <Modal
+        visible={showEventModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEventModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 560, position: "relative" }]}>
+            <TouchableOpacity
+              onPress={() => setShowEventModal(false)}
+              style={styles.blackCloseSquare}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Text style={styles.blackCloseSquareText}>✕</Text>
+            </TouchableOpacity>
+            {loadingEvent ? (
+              <Text style={styles.sectionMuted}>Indlæser…</Text>
+            ) : activeEvent ? (
+              <View>
+                {activeEvent.image_url ? (
+                  <Image
+                    source={{ uri: activeEvent.image_url }}
+                    style={styles.detailImage}
+                  />
+                ) : null}
+                <Text style={styles.detailTitle}>{activeEvent.title}</Text>
+                <Text style={styles.detailRange}>
+                  {formatDateRange(activeEvent.start_at, activeEvent.end_at)}
+                </Text>
+                {!!activeEvent.location && (
+                  <Text style={styles.detailMeta}>📍 {activeEvent.location}</Text>
+                )}
+                {!!activeEvent.price && (
+                  <Text style={styles.detailMeta}>Pris: {activeEvent.price} kr.</Text>
+                )}
+                {!!activeEvent.capacity && (
+                  <Text style={styles.detailMeta}>
+                    Kapacitet: {activeEvent.capacity}
+                  </Text>
+                )}
+                {!!activeEvent.description && (
+                  <Text style={[styles.detailMeta, { marginTop: 6 }]}>
+                    {activeEvent.description}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.sectionMuted}>Kunne ikke indlæse aktiviteten.</Text>
+            )}
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -855,7 +1505,12 @@ export default function ForeningDetaljeScreen() {
 
 /* ---------- Styles ---------- */
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#7C8996" },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#7C8996",
+  },
 
   /* Topbar */
   topBar: {
@@ -879,19 +1534,30 @@ const styles = StyleSheet.create({
   },
   backBtnText: { color: "#fff", fontWeight: "800", fontSize: 16, lineHeight: 16 },
 
+  /* Counter (stor – tidligere i topbar) */
   counter: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#131921",
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: "#e5e8ec",
+    paddingVertical: 1,
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: "#fff",
   },
-  counterIcon: { fontSize: 12, color: "#131921" },
-  counterNum: { color: "#131921", fontWeight: "800", fontSize: 13 },
+  counterNum: { color: "#fff", fontWeight: "800", fontSize: 13 },
+
+  /* Counter (lille – i sektion header) */
+  counterSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#000",
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
 
   /* Kort */
   card: {
@@ -908,22 +1574,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#eef1f4",
   },
-  hero: { width: "100%", height: 180, borderRadius: 10, marginBottom: 8, resizeMode: "cover", backgroundColor: "#f0f0f0" },
+  hero: {
+    width: "100%",
+    height: 300,
+    borderRadius: 10,
+    marginBottom: 8,
+    resizeMode: "cover",
+    backgroundColor: "#f0f0f0",
+  },
   heroTablet: { height: 420 },
-  heroPlaceholder: { backgroundColor: "#f0f0f0", alignItems: "center", justifyContent: "center" },
-
+  heroPlaceholder: {
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: { fontSize: 15, fontWeight: "800", color: "#131921", marginTop: 4 },
   place: { fontSize: 12, fontWeight: "500", color: "#000", marginTop: 2 },
   desc: { fontSize: 13, color: "#000", marginTop: 6, lineHeight: 18 },
 
-  /* Inputs til redigering */
   input: {
-    backgroundColor: "#fff", borderRadius: 8, borderWidth: 1, borderColor: "#e5e8ec",
-    paddingHorizontal: 10, paddingVertical: 8, color: "#000", marginTop: 6,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e8ec",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: "#000",
+    marginTop: 6,
   },
   titleInput: { fontSize: 16, fontWeight: "900", color: "#131921" },
   descInput: { minHeight: 76, textAlignVertical: "top" },
-  editRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  editRow: { flexDirection: "row", marginTop: 10 },
   smallActionBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
   smallActionText: { color: "#fff", fontWeight: "800" },
   editBtn: { backgroundColor: "#131921" },
@@ -934,43 +1615,106 @@ const styles = StyleSheet.create({
   join: { backgroundColor: "#131921" },
   bigBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
-  /* Sektioner */
+  /* Sektioner (kort) */
   section: {
-    marginTop: 12, marginHorizontal: 14, backgroundColor: "#FFFFFF", borderRadius: 14, padding: 12,
-    borderWidth: 1, borderColor: "#eef1f4", shadowColor: "#000", shadowOpacity: 0.04,
-    shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+    marginTop: 12,
+    marginHorizontal: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#eef1f4",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  sectionTitle: { fontSize: 12, fontWeight: "900", color: "#131921" },
+
+  /* Gør headeren til en række med plads til tæller til højre */
+  sectionHeader: {
+    backgroundColor: "#131921",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 0, // ingen vertikal padding
+    height: 50,        // fast højde for alle
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sectionHeaderText: { color: "#fff", fontWeight: "900", fontSize: 15 },
+
+  sectionTitle: { fontSize: 15, fontWeight: "900", color: "#131921" },
   sectionMuted: { marginTop: 4, color: "#000", fontSize: 12, opacity: 0.7 },
 
-  /* Medlemmer (preview) */
+  /* Medlemmer */
   memberBox: { alignItems: "center", marginRight: 12, minWidth: 64 },
-  memberAvatar: { width: 60, height: 60, borderRadius: 8, marginBottom: 4, backgroundColor: "#f0f0f0" },
-  memberAvatarPlaceholder: { width: 60, height: 60, borderRadius: 8, marginBottom: 4, backgroundColor: "#f0f0f0", alignItems: "center", justifyContent: "center" },
-  memberName: { color: "#000", fontSize: 10, fontWeight: "700", textAlign: "center" },
+  memberAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginBottom: 4,
+    backgroundColor: "#f0f0f0",
+  },
+  memberAvatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginBottom: 4,
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  memberName: {
+    color: "#000",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
 
-  /* Tråd preview */
-  threadItemRow: { flexDirection: "row", alignItems: "center", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#e9edf1", paddingVertical: 10 },
+  /* Tråde */
+  threadItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 2,              // tykkere streg
+    borderTopColor: "#cfd6de",      // lidt mørkere
+    paddingVertical: 12,
+  },
   threadItemLeft: { flex: 1 },
-  threadTitle: { fontSize: 10, fontWeight: "800", color: "#131921" },
+  threadTitle: { fontSize: 17, fontWeight: "800", color: "#131921" },
   threadMeta: { fontSize: 9, color: "#000", opacity: 0.6, marginTop: 2 },
 
-  /* Aktiviteter preview */
+  /* Aktiviteter */
   eventRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e9edf1",
-    paddingVertical: 10,
+    borderTopWidth: 2,             // tykkere streg
+    borderTopColor: "#cfd6de",
+    paddingVertical: 12,
   },
-  eventTitle: { fontSize: 12, fontWeight: "800", color: "#131921" },
-  eventMeta: { fontSize: 10, color: "#000", opacity: 0.7, marginTop: 2 },
+  eventTitle: { fontSize: 17, fontWeight: "800", color: "#131921" },
+  eventMeta: { fontSize: 12, color: "#000", opacity: 0.7, marginTop: 2 },
 
-  /* Bundsektion: handlinger (3 knapper) */
+  /* Første række skal ikke have topstreg */
+  noTopBorder: { borderTopWidth: 0 },
+
+  /* Bunden */
   bottomActions: {
-    marginTop: 12, marginHorizontal: 14, marginBottom: 12, backgroundColor: "#FFFFFF", borderRadius: 14, padding: 12, gap: 10,
-    shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2,
-    borderWidth: 1, borderColor: "#eef1f4",
+    marginTop: 12,
+    marginHorizontal: 14,
+    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#eef1f4",
   },
   actionBtn: { borderRadius: 8, paddingVertical: 12, alignItems: "center" },
   leaveAction: { backgroundColor: "#9aa0a6" },
@@ -980,13 +1724,33 @@ const styles = StyleSheet.create({
   deleteActionText: { color: "#fff", fontSize: 12, fontWeight: "800" },
 
   /* Modal */
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", alignItems: "center", justifyContent: "center", padding: 18 },
-  modalCard: { width: "100%", maxWidth: 520, backgroundColor: "#FFFFFF", borderRadius: 8, padding: 12, borderWidth: 1, borderColor: "#eef1f4" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.90)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 520,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#eef1f4",
+  },
 
   listHeader: { fontSize: 10, fontWeight: "800", color: "#131921", marginVertical: 6 },
   emptyLine: { fontSize: 10, color: "#000", paddingVertical: 6, opacity: 0.7 },
 
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#e8eef2" },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e8eef2",
+  },
   rowAvatar: { width: 34, height: 34, borderRadius: 17, marginRight: 10, backgroundColor: "#f0f0f0" },
   rowAvatarPh: { backgroundColor: "#f0f0f0", alignItems: "center", justifyContent: "center" },
   rowName: { fontSize: 13, fontWeight: "700", color: "#000" },
@@ -998,14 +1762,100 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 12, fontWeight: "800", color: "#000" },
   roleBadge: { fontSize: 10, fontWeight: "900", color: "#131921", marginVertical: 8 },
 
-  modalCloseBottom: { alignSelf: "flex-end", marginTop: 10, backgroundColor: "#131921", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  modalCloseBottom: {
+    alignSelf: "flex-end",
+    marginTop: 10,
+    backgroundColor: "#131921",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
   modalCloseText: { color: "#fff", fontWeight: "900", fontSize: 16 },
 
-  /* Mini-knapper i medlemslister */
-  smallBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  /* Mini-knapper */
+  smallBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   smallBtnText: { color: "#fff", fontWeight: "800", fontSize: 11 },
   approveBtn: { backgroundColor: "#1f7a33" },
   rejectBtn: { backgroundColor: "#9aa0a6" },
   deleteMiniBtn: { backgroundColor: "#C62828" },
   btnDisabled: { opacity: 0.6 },
+
+  /* Kalender */
+  calHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  calNavBtn: {
+    width: 34,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "#f3f5f7",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#e2e8f0",
+  },
+  calNavText: { color: "#131921", fontWeight: "900", fontSize: 16 },
+  calMonthLabel: { color: "#131921", fontWeight: "900", fontSize: 14 },
+  calWeekdays: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  calWeekdayText: {
+    width: "14.2857%",
+    textAlign: "center",
+    color: "#131921",
+    fontWeight: "800",
+    fontSize: 11,
+    opacity: 0.75,
+  },
+  calGrid: { borderRadius: 10, overflow: "hidden", backgroundColor: "#f8fafc" },
+  calRow: { flexDirection: "row" },
+  calCell: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  calCellDim: { backgroundColor: "#f1f5f9" },
+  calCellActive: { backgroundColor: "#131921" },
+  calDayNum: { color: "#1d2b3a", fontWeight: "700", fontSize: 13 },
+  calDot: { position: "absolute", bottom: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" },
+
+  /* Luk-knap */
+  blackCloseSquare: {
+    position: "absolute",
+    top: 10,
+    right: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  blackCloseSquareText: { color: "#fff", fontSize: 18, fontWeight: "900" },
+
+  /* Event-detaljer */
+  detailImage: { width: "100%", height: 220, borderRadius: 12, backgroundColor: "#f1f1f1", marginBottom: 8 },
+  detailTitle: { fontSize: 14, fontWeight: "900", color: "#131921" },
+  detailRange: { fontSize: 11, color: "#000", opacity: 0.85, marginTop: 2 },
+  detailMeta: { fontSize: 11, color: "#000", opacity: 0.85, marginTop: 2 },
+
+  /* Billeder – preview række */
+  imagesPreviewRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  imagesPreviewThumb: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
+  },
 });

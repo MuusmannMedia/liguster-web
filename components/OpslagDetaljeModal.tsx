@@ -24,6 +24,7 @@ export default function OpslagDetaljeModal({
   onClose,
   currentUserId,
   onSendSvar,
+  canReply = true, // ← NY: kan bruges til at skjule SVAR-knappen (fx i MineOpslag)
 }) {
   const [imgLayout, setImgLayout] = useState(null);
 
@@ -50,6 +51,7 @@ export default function OpslagDetaljeModal({
 
   if (!opslag) return null;
   const isOwner = opslag.user_id === currentUserId;
+  const showReply = !!onSendSvar && !isOwner && canReply !== false; // ← vis SVAR kun når det giver mening
 
   return (
     <Modal
@@ -84,11 +86,13 @@ export default function OpslagDetaljeModal({
           <ScrollView style={styles.beskrivelseScroll} nestedScrollEnabled>
             <Text style={styles.beskrivelse}>{opslag.text}</Text>
           </ScrollView>
+
           <View style={styles.btnRow}>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.luk}>LUK</Text>
             </TouchableOpacity>
-            {!isOwner && (
+
+            {showReply && (
               <TouchableOpacity onPress={onSendSvar}>
                 <Text style={styles.svar}>SVAR</Text>
               </TouchableOpacity>
