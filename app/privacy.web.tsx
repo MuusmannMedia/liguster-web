@@ -153,7 +153,7 @@ export default function WebPrivacy() {
         </Section>
 
         <Section title="Contact">
-          <P>Email: morten.muusmann@gmail.com</P>
+          <P>Email: kontakt@liguster-app.dk</P>
           <Text style={styles.smallNote}>Generated using Free Privacy Policy Generator (customised for Liguster).</Text>
         </Section>
 

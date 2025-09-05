@@ -1,18 +1,39 @@
-// app/privacy.tsx
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import React from "react";
-import { Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 export default function PrivacyPolicy() {
   const router = useRouter();
+  // Fallback inkl. trailing slash:
+  const privacyUrl =
+    (Constants.expoConfig?.extra as any)?.privacyUrl ||
+    "https://www.liguster-app.dk/privacy/";
 
-  const handleOpenFullPolicy = () => {
-    Linking.openURL("https://www.liguster-app.dk/privacy");
+  const openFullPolicy = async () => {
+    try {
+      await WebBrowser.openBrowserAsync(privacyUrl, {
+        // pænt toolbar-tema; ignoreres hvor ikke understøttet
+        toolbarColor: "#131921",
+        enableBarCollapsing: true,
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      });
+    } catch {
+      // Hvis noget går galt, lader vi routeren prøve (web)
+      if (Platform.OS === "web") window.location.href = privacyUrl;
+    }
   };
 
   return (
     <View style={styles.root}>
-      {/* Tilbage-knap kun i native app */}
       {Platform.OS !== "web" && (
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -26,24 +47,25 @@ export default function PrivacyPolicy() {
         <Text style={styles.updated}>Last updated: August 04, 2025</Text>
 
         <Text style={styles.paragraph}>
-          This Privacy Policy describes Our policies and procedures on the collection, use and
-          disclosure of Your information when You use the Service and tells You about Your
-          privacy rights and how the law protects You.
+          This Privacy Policy describes Our policies and procedures on the
+          collection, use and disclosure of Your information when You use the
+          Service and tells You about Your privacy rights and how the law
+          protects You.
         </Text>
 
         <Text style={styles.paragraph}>
-          We use Your Personal data to provide and improve the Service. By using the Service,
-          You agree to the collection and use of information in accordance with this Privacy
-          Policy.
+          We use Your Personal data to provide and improve the Service. By using
+          the Service, You agree to the collection and use of information in
+          accordance with this Privacy Policy.
         </Text>
 
         <Text style={styles.section}>Contact</Text>
         <Text style={styles.paragraph}>
-          If you have any questions, contact us by email: morten.muusmann@gmail.com
+          If you have any questions, contact us by email:
+          {" "}kontakt@liguster-app.dk
         </Text>
 
-        {/* Link til fuld web-version */}
-        <TouchableOpacity onPress={handleOpenFullPolicy}>
+        <TouchableOpacity onPress={openFullPolicy}>
           <Text style={styles.link}>
             Læs den fulde politik på liguster-app.dk/privacy
           </Text>
