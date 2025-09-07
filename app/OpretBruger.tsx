@@ -1,5 +1,7 @@
+// app/OpretBruger.tsx
+import { Ionicons } from '@expo/vector-icons'; // expo install @expo/vector-icons
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
@@ -15,58 +17,77 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabase';
 
-// Skjul header
 export const options = { headerShown: false };
 
 export default function OpretBruger() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const router = useRouter();
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const pwdRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
+
+  const emailTrimmed = email.trim();
+  const isEmailValid = useMemo(
+    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed),
+    [emailTrimmed]
+  );
+  const isPasswordStrong = password.length >= 8;
+  const passwordsMatch = confirm === password;
+
+  const canSubmit = isEmailValid && isPasswordStrong && passwordsMatch && !loading;
 
   const handleSignup = async () => {
-    if (!email || !password) {
-      Alert.alert('Fejl', 'Udfyld både email og password');
-      return;
-    }
+    if (!isEmailValid) return Alert.alert('Fejl', 'Indtast en gyldig email.');
+    if (!isPasswordStrong) return Alert.alert('Fejl', 'Password skal være mindst 8 tegn.');
+    if (!passwordsMatch) return Alert.alert('Fejl', 'Passwords er ikke ens.');
 
-    // VIGTIGT: Fortæl Supabase at bekræftelseslinket skal åbne LoginScreen
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: 'ligusterapp://LoginScreen',
-      },
-    });
-
-    if (error) {
-      Alert.alert('Fejl', error.message);
-      return;
-    }
-
-    // (Best effort) Opret post i users-tabellen, hvis ikke findes
     try {
-      const userId = data?.user?.id || data?.session?.user?.id;
-      const userEmail = data?.user?.email || data?.session?.user?.email;
-      if (userId && userEmail) {
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('id', userId)
-          .single();
+      setLoading(true);
 
-        if (!existingUser) {
-          await supabase.from('users').insert([{ id: userId, email: userEmail }]);
+      const { data, error } = await supabase.auth.signUp({
+        email: emailTrimmed,
+        password,
+        options: {
+          emailRedirectTo: 'ligusterapp://LoginScreen',
+        },
+      });
+
+      if (error) throw error;
+
+      // Opret i users-tabellen
+      try {
+        const userId = data?.user?.id || data?.session?.user?.id;
+        const userEmail = data?.user?.email || data?.session?.user?.email || emailTrimmed;
+        if (userId && userEmail) {
+          const { data: existing } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', userId)
+            .maybeSingle();
+
+          if (!existing) {
+            await supabase.from('users').insert([{ id: userId, email: userEmail }]);
+          }
         }
+      } catch {
+        // Ignorér sekundær fejl
       }
-    } catch {
-      // Ignorer – sekundær
-    }
 
-    Alert.alert(
-      'Succes',
-      'Din bruger er oprettet! Tjek din email for at bekræfte, og log derefter ind.'
-    );
-    router.replace('/LoginScreen');
+      Alert.alert(
+        'Succes',
+        'Din bruger er oprettet! Tjek din email for at bekræfte, og log derefter ind.'
+      );
+      router.replace('/LoginScreen');
+    } catch (e: any) {
+      Alert.alert('Fejl', e?.message || 'Noget gik galt. Prøv igen.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -92,20 +113,77 @@ export default function OpretBruger() {
               placeholderTextColor="#999"
               autoCapitalize="none"
               keyboardType="email-address"
+              textContentType="emailAddress"
               value={email}
               onChangeText={setEmail}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
+              returnKeyType="next"
+              onSubmitEditing={() => pwdRef.current?.focus()}
+              blurOnSubmit={false}
             />
 
-            <TouchableOpacity style={styles.button} onPress={handleSignup}>
-              <Text style={styles.buttonText}>OPRET BRUGER</Text>
+            {/* Password felt med toggle */}
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                ref={pwdRef}
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Password (min. 8 tegn)"
+                placeholderTextColor="#999"
+                secureTextEntry={!showPassword}
+                textContentType="newPassword"
+                value={password}
+                onChangeText={setPassword}
+                returnKeyType="next"
+                onSubmitEditing={() => confirmRef.current?.focus()}
+                blurOnSubmit={false}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eye}>
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={22}
+                  color="#555"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bekræft password felt med toggle */}
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                ref={confirmRef}
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Bekræft password"
+                placeholderTextColor="#999"
+                secureTextEntry={!showConfirm}
+                textContentType="newPassword"
+                value={confirm}
+                onChangeText={setConfirm}
+                returnKeyType="go"
+                onSubmitEditing={canSubmit ? handleSignup : undefined}
+              />
+              <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} style={styles.eye}>
+                <Ionicons
+                  name={showConfirm ? 'eye-off' : 'eye'}
+                  size={22}
+                  color="#555"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {!isEmailValid && email.length > 0 && (
+              <Text style={styles.hint}>Indtast en gyldig email-adresse.</Text>
+            )}
+            {!isPasswordStrong && password.length > 0 && (
+              <Text style={styles.hint}>Password skal være mindst 8 tegn.</Text>
+            )}
+            {!passwordsMatch && confirm.length > 0 && (
+              <Text style={styles.hint}>Passwords er ikke ens.</Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.button, !canSubmit && { opacity: 0.55 }]}
+              onPress={handleSignup}
+              disabled={!canSubmit}
+            >
+              <Text style={styles.buttonText}>{loading ? 'OPRETTER…' : 'OPRET BRUGER'}</Text>
             </TouchableOpacity>
           </SafeAreaView>
         </TouchableWithoutFeedback>
@@ -120,6 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#171C22',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
   },
   backIcon: {
     position: 'absolute',
@@ -156,6 +235,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 18,
     fontSize: 16,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 260,
+    marginBottom: 18,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingRight: 8,
+  },
+  eye: { padding: 6 },
+  hint: {
+    color: '#fca5a5',
+    fontSize: 12,
+    marginBottom: 6,
   },
   button: {
     backgroundColor: '#fff',

@@ -7,7 +7,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,7 +16,6 @@ import {
 } from 'react-native';
 import { supabase } from '../utils/supabase';
 
-// Skjul header hvis du bruger Stack
 export const options = { headerShown: false };
 
 export default function LoginScreen() {
@@ -26,7 +24,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // så vi kan hoppe fra email -> password med "next"
   const passwordRef = useRef<TextInput>(null);
 
   const goHome = () => router.replace('/');
@@ -48,30 +45,24 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#171C22' }}>
-      {/* KeyboardAvoidingView skubber indholdet væk fra tastaturet */}
+    <View style={styles.root}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: 'height' })}
-        keyboardVerticalOffset={Platform.select({ ios: 0, android: 0 })} // justér hvis du har en fast topbar
       >
-        {/* Tryk udenfor inputs lukker tastaturet */}
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <SafeAreaView style={{ flex: 1 }}>
-            {/* Scroll så små skærme også kan nå knappen */}
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
+          <SafeAreaView style={styles.safe}>
+            {/* Tilbage-knap */}
+            <TouchableOpacity
+              style={styles.backIcon}
+              onPress={goHome}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              {/* Tilbage-knap */}
-              <TouchableOpacity
-                style={styles.backIcon}
-                onPress={goHome}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={{ fontSize: 30, color: '#fff' }}>{'‹'}</Text>
-              </TouchableOpacity>
+              <Text style={styles.backIconText}>{'‹'}</Text>
+            </TouchableOpacity>
 
+            {/* Centreret login-container */}
+            <View style={styles.centered}>
               <Text style={styles.title}>Log ind</Text>
 
               <TextInput
@@ -80,6 +71,7 @@ export default function LoginScreen() {
                 placeholderTextColor="#999"
                 autoCapitalize="none"
                 keyboardType="email-address"
+                textContentType="username"
                 value={email}
                 onChangeText={setEmail}
                 returnKeyType="next"
@@ -93,6 +85,7 @@ export default function LoginScreen() {
                 placeholder="Password"
                 placeholderTextColor="#999"
                 secureTextEntry
+                textContentType="password"
                 value={password}
                 onChangeText={setPassword}
                 returnKeyType="go"
@@ -102,7 +95,7 @@ export default function LoginScreen() {
               <TouchableOpacity style={styles.button} onPress={onLogin} disabled={loading}>
                 <Text style={styles.buttonText}>{loading ? 'Logger ind…' : 'LOG IND'}</Text>
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </SafeAreaView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -111,33 +104,40 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    flexGrow: 1,
+  root: { flex: 1, backgroundColor: '#171C22' },
+  safe: { flex: 1 },
+
+  centered: {
+    flex: 1,
+    justifyContent: 'center', // <-- centrerer vertikalt i det synlige område
     alignItems: 'center',
-    justifyContent: 'center', // centrer når tastatur er lukket
     paddingHorizontal: 20,
-    paddingBottom: 24, // lidt luft når tastatur er åbent
   },
+
   backIcon: {
     position: 'absolute',
-    top: 20,
-    left: 16,
-    zIndex: 99,
-    width: 30,
-    height: 40,
+    top: 12,
+    left: 12,
+    zIndex: 10,
+    width: 36,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
-  title: { color: '#fff', fontSize: 28, fontWeight: '700', marginBottom: 16, marginTop: 8 },
+  backIconText: { fontSize: 30, color: '#fff' },
+
+  title: { color: '#fff', fontSize: 28, fontWeight: '700', marginBottom: 16 },
+
   input: {
     backgroundColor: '#fff',
     width: 260,
     height: 48,
     borderRadius: 10,
     paddingHorizontal: 14,
-    marginBottom: 18,
+    marginBottom: 16,
     fontSize: 16,
   },
+
   button: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 8,
     elevation: 1,
   },
   buttonText: { color: '#171C22', fontSize: 16, fontWeight: '700', letterSpacing: 1 },
