@@ -25,10 +25,10 @@ import { supabase } from "../../utils/supabase";
 
 /* ─────────────────────────  Tema/konstanter  ───────────────────────── */
 const COLORS = {
-  bg: "#0f1623",
+  bg: "#7C8996",          // ← ønsket lysere blå baggrund
   pane: "#111827",
-  text: "#e5e7eb",
-  sub: "#94a3b8",
+  text: "#131921",
+  sub: "#2b3440",
   white: "#fff",
   blue: "#131921",
   blueTint: "#25489022",
@@ -48,19 +48,16 @@ const SHADOW = {
 };
 const distances = [1, 2, 3, 5, 10, 20, 50];
 
-/* Layout til web-banen */
+/* Layout */
 const LAYOUT = {
   CONTAINER_MAX_W: 1180,
   SIDE_PADDING: 24,
-  ITEM_GAP: 16,
+  ITEM_GAP: 16,       // afstand mellem kort
   MAX_CARD_W: 560,
 };
 
 /* ───────────────────────────────  Hjælpere  ─────────────────────────────── */
-function fmtKm(n: number) {
-  if (Number.isNaN(n)) return "";
-  return `${n.toFixed(1)} km`;
-}
+const fmtKm = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
 function KategoriSelector({
   value,
@@ -72,7 +69,7 @@ function KategoriSelector({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <TouchableOpacity style={styles.iconBtn} onPress={() => setOpen(true)} activeOpacity={0.85}>
+      <TouchableOpacity style={styles.iconBtn} onPress={() => setOpen(true)}>
         <Text style={styles.iconBtnText}>▼</Text>
       </TouchableOpacity>
 
@@ -80,6 +77,7 @@ function KategoriSelector({
         <View style={dialogStyles.overlay}>
           <View style={dialogStyles.dialog}>
             <Text style={dialogStyles.title}>Vælg kategori</Text>
+
             <TouchableOpacity
               style={[dialogStyles.option, value === null && dialogStyles.selectedOption]}
               onPress={() => {
@@ -89,6 +87,7 @@ function KategoriSelector({
             >
               <Text style={{ fontWeight: value === null ? "bold" : "normal" }}>Alle</Text>
             </TouchableOpacity>
+
             {KATEGORIER.map((k) => (
               <TouchableOpacity
                 key={k}
@@ -101,6 +100,7 @@ function KategoriSelector({
                 <Text style={{ fontWeight: value === k ? "bold" : "normal" }}>{k}</Text>
               </TouchableOpacity>
             ))}
+
             <TouchableOpacity style={dialogStyles.closeBtn} onPress={() => setOpen(false)}>
               <Text style={dialogStyles.closeBtnText}>Luk</Text>
             </TouchableOpacity>
@@ -225,12 +225,8 @@ function OpretOpslagWeb({
         image_url,
       });
 
-      setOverskrift("");
-      setText("");
-      setOmraade("");
-      setKategori(null);
-      setImagePreview(null);
-      setImageBase64(null);
+      setOverskrift(""); setText(""); setOmraade(""); setKategori(null);
+      setImagePreview(null); setImageBase64(null);
       onClose();
     } catch (e: any) {
       alert(e?.message || "Kunne ikke oprette opslag.");
@@ -287,10 +283,7 @@ function OpretOpslagWeb({
               <View style={{ marginTop: 8 }}>
                 <Image source={{ uri: imagePreview }} style={styles.preview} />
                 <TouchableOpacity
-                  onPress={() => {
-                    setImagePreview(null);
-                    setImageBase64(null);
-                  }}
+                  onPress={() => { setImagePreview(null); setImageBase64(null); }}
                   style={[styles.smallBtn, styles.grayBtn, { alignSelf: "flex-start", marginTop: 8 }]}
                 >
                   <Text style={styles.smallBtnText}>Fjern billede</Text>
@@ -398,14 +391,18 @@ export default function NabolagWeb() {
   const [detaljeVisible, setDetaljeVisible] = useState(false);
   const [valgtOpslag, setValgtOpslag] = useState<Post | null>(null);
 
-  // Maks 3 kolonner (ellers 2/1 på small)
+  // Breakpoints: maks 3 kolonner (ellers 2/1), og undgå afrundings-overflow
   const { width } = useWindowDimensions();
   const containerInnerW = Math.min(width, LAYOUT.CONTAINER_MAX_W) - LAYOUT.SIDE_PADDING * 2;
-  const numColumns =
-    containerInnerW >= 980 ? 3 : containerInnerW >= 660 ? 2 : 1; // ← cap = 3
+  const numColumns = containerInnerW >= 980 ? 3 : containerInnerW >= 660 ? 2 : 1;
   const isGrid = numColumns > 1;
+
+  const rowGap = LAYOUT.ITEM_GAP;
+  const colHalfGap = rowGap / 2;
+
+  // Hårdt golv (floor) så 3*itemWidth + gaps aldrig overstiger containeren pga. decimaler
   const itemWidth = isGrid
-    ? (containerInnerW - LAYOUT.ITEM_GAP * (numColumns - 1)) / numColumns
+    ? Math.floor((containerInnerW - rowGap * (numColumns - 1)) / numColumns)
     : Math.min(LAYOUT.MAX_CARD_W, containerInnerW);
 
   const distanceText = useMemo(() => {
@@ -427,11 +424,13 @@ export default function NabolagWeb() {
 
     return (
       <TouchableOpacity
-        onPress={() => {
-          setValgtOpslag(item);
-          setDetaljeVisible(true);
+        onPress={() => { setValgtOpslag(item); setDetaljeVisible(true); }}
+        style={{
+          width: itemWidth,
+          marginBottom: rowGap,
+          marginHorizontal: isGrid ? colHalfGap : 0,
+          alignSelf: isGrid ? "auto" : "center",
         }}
-        style={{ width: itemWidth, marginBottom: 16, alignSelf: isGrid ? "auto" : "center" }}
         activeOpacity={0.9}
       >
         <View style={styles.card}>
@@ -469,7 +468,7 @@ export default function NabolagWeb() {
             onChangeText={setSearchQuery}
             style={styles.searchInput}
             placeholder="Søg i opslag…"
-            placeholderTextColor="#64748b"
+            placeholderTextColor="#2b3440"
             returnKeyType="search"
           />
           <KategoriSelector value={kategoriFilter} onChange={setKategoriFilter} />
@@ -477,25 +476,26 @@ export default function NabolagWeb() {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#cbd5e1" style={{ marginTop: 30 }} />
+          <ActivityIndicator size="large" color="#131921" style={{ marginTop: 30 }} />
         ) : (
           <FlatList
             data={filteredPosts}
             keyExtractor={(item) => item.id}
-            style={{ width: "100%" }}
+            style={{ width: "100%", alignSelf: "center" }}
             contentContainerStyle={{
               paddingTop: 12,
               paddingBottom: 56,
-              alignItems: "stretch",
+              // “halv-gap” trick så grid aldrig stikker ud i højre side
+              paddingHorizontal: LAYOUT.SIDE_PADDING - (isGrid ? colHalfGap : 0),
+              alignItems: isGrid ? "stretch" : "center",
+              rowGap,
             }}
             keyboardShouldPersistTaps="handled"
             numColumns={isGrid ? numColumns : 1}
-            columnWrapperStyle={
-              isGrid ? { gap: LAYOUT.ITEM_GAP, justifyContent: "flex-start" } : undefined
-            }
+            // vi bruger margen på items i stedet for gap her (mere stabilt på RN Web)
             renderItem={renderItem}
             ListEmptyComponent={<Text style={{ color: COLORS.sub, marginTop: 22 }}>Ingen opslag fundet.</Text>}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#fff"]} />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#131921"]} />}
           />
         )}
       </View>
@@ -503,9 +503,7 @@ export default function NabolagWeb() {
       <OpretOpslagWeb
         visible={opretVisible}
         onClose={() => setOpretVisible(false)}
-        onSubmit={async (payload) => {
-          await createPost(payload);
-        }}
+        onSubmit={async (payload) => { await createPost(payload); }}
         currentUserId={userId}
       />
 
@@ -532,6 +530,7 @@ const styles = StyleSheet.create({
 
   h1: { color: COLORS.text, fontSize: 28, fontWeight: "800", marginBottom: 8 },
 
+  /* CTA */
   primaryCta: {
     width: "100%",
     backgroundColor: COLORS.blue,
@@ -546,6 +545,7 @@ const styles = StyleSheet.create({
   },
   primaryCtaText: { color: COLORS.white, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
 
+  /* Filtre */
   filterRow: {
     width: "100%",
     flexDirection: "row",
@@ -556,14 +556,14 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: "#0b1220",
+    backgroundColor: "#dfe6ee",
     borderRadius: RADII.sm,
     paddingHorizontal: 15,
     paddingVertical: 12,
     fontSize: 15,
     color: COLORS.text,
     borderWidth: 1.5,
-    borderColor: COLORS.fieldBorder,
+    borderColor: "#b9c4cf",
   },
   iconBtn: {
     height: 45,
@@ -589,6 +589,7 @@ const styles = StyleSheet.create({
   },
   radiusBtnText: { color: COLORS.white, fontWeight: "bold", fontSize: 15, letterSpacing: 1 },
 
+  /* Cards */
   card: {
     width: "100%",
     backgroundColor: COLORS.card,
@@ -611,6 +612,7 @@ const styles = StyleSheet.create({
   cardTeaser: { fontSize: 13, color: "#475569", marginTop: 3 },
   distance: { fontSize: 11, color: "#6b7280", marginTop: 4 },
 
+  /* Inputs i dialog */
   input: {
     backgroundColor: "#fff",
     borderRadius: 8,
