@@ -3,6 +3,9 @@ import { Link } from "expo-router";
 import React, { useEffect } from "react";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
+// Brug ESM import (SSR-/bundler-venlig)
+import LogoNEG from "../assets/images/Liguster-logo-NEG.png";
+
 export default function WebLanding() {
   useEffect(() => {
     console.log("EXPO_PUBLIC_SUPABASE_URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
@@ -37,11 +40,7 @@ export default function WebLanding() {
           </View>
 
           <View style={styles.heroCol}>
-            <Image
-              source={require("../assets/images/Liguster-logo-NEG.png")}
-              style={styles.heroImage}
-              resizeMode="contain"
-            />
+            <Image source={LogoNEG} style={styles.heroImage} resizeMode="contain" />
           </View>
         </View>
       </View>
@@ -49,18 +48,9 @@ export default function WebLanding() {
       {/* Features */}
       <View style={styles.section}>
         <View style={styles.columns}>
-          <Feature
-            title="Opslag & hjælp"
-            text="Efterlys hjælp, tilbyd din hånd eller del ting væk. Alt samlet i nabolaget."
-          />
-          <Feature
-            title="Foreninger"
-            text="Medlemslister, kalender, opslag og beskeder – nemt for bestyrelsen."
-          />
-          <Feature
-            title="Beskeder"
-            text="Hold samtalen i appen – både 1:1 og i grupper."
-          />
+          <Feature title="Opslag & hjælp" text="Efterlys hjælp, tilbyd din hånd eller del ting væk. Alt samlet i nabolaget." />
+          <Feature title="Foreninger" text="Medlemslister, kalender, opslag og beskeder – nemt for bestyrelsen." />
+          <Feature title="Beskeder" text="Hold samtalen i appen – både 1:1 og i grupper." />
         </View>
       </View>
 
