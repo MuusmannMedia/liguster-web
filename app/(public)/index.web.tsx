@@ -10,7 +10,6 @@ import {
   View,
 } from "react-native";
 
-// Brug import i stedet for require (bedst til bundleren)
 import LogoNEG from "../../assets/images/Liguster-logo-NEG.png";
 
 export default function IndexWeb() {
@@ -18,22 +17,16 @@ export default function IndexWeb() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      {/* Logo */}
-      <Image
-        source={LogoNEG}
-        style={styles.heroImage}
-        resizeMode="contain"
-      />
+      <Image source={LogoNEG} style={styles.heroImage} resizeMode="contain" />
 
-      {/* Intro-tekst */}
       <Text style={styles.title}>Velkommen til Liguster</Text>
       <Text style={styles.subtitle}>
         Din lokale platform for fællesskab, hjælp og genbrug 🌱
       </Text>
 
-      {/* CTA-knapper */}
       <View style={styles.buttons}>
         <TouchableOpacity
+          accessibilityRole="button"
           style={styles.btn}
           onPress={() => router.push("/LoginScreen")}
         >
@@ -41,6 +34,7 @@ export default function IndexWeb() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          accessibilityRole="button"
           style={[styles.btn, styles.btnSecondary]}
           onPress={() => router.push("/OpretBruger")}
         >
@@ -52,51 +46,20 @@ export default function IndexWeb() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#0f1623",
-  },
+  root: { flex: 1, backgroundColor: "#0f1623" },
   container: {
     flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
   },
-  heroImage: {
-    width: 240,
-    height: 240,
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#fff",
-    marginBottom: 10,
-    textAlign: "center",
-  },
+  heroImage: { width: 240, height: 240, marginBottom: 30 },
+  title: { fontSize: 28, fontWeight: "800", color: "#fff", marginBottom: 10, textAlign: "center" },
   subtitle: {
-    fontSize: 16,
-    color: "#cbd5e1",
-    marginBottom: 30,
-    textAlign: "center",
-    maxWidth: 500,
+    fontSize: 16, color: "#cbd5e1", marginBottom: 30, textAlign: "center", maxWidth: 500,
   },
-  buttons: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  btn: {
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    borderRadius: 10,
-  },
-  btnSecondary: {
-    backgroundColor: "#94a3b8",
-  },
-  btnText: {
-    color: "#0f1623",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  buttons: { flexDirection: "row", gap: 16 },
+  btn: { backgroundColor: "#ffffff", paddingHorizontal: 22, paddingVertical: 14, borderRadius: 10 },
+  btnSecondary: { backgroundColor: "#94a3b8" },
+  btnText: { color: "#0f1623", fontWeight: "700", fontSize: 16 },
 });
