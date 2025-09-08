@@ -4,14 +4,14 @@ import Head from "expo-router/head";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
 import { useSession } from "../hooks/useSession";
 import { supabase } from "../utils/supabase";
 
-const PREVIEW = process.env.EXPO_PUBLIC_PREVIEW === "1"; // styr “under udvikling” tilstand
+const PREVIEW = process.env.EXPO_PUBLIC_PREVIEW === "1";
 
 export default function WebLayout() {
   const { session, loading } = useSession();
-  const isLoading = loading;
   const isAuthed = !!session;
 
   const handleSignOut = useCallback(async () => {
@@ -24,7 +24,7 @@ export default function WebLayout() {
 
   return (
     <View style={styles.page}>
-      {/* Meta for web (deaktiver crawl i preview) */}
+      {/* Meta for web */}
       <Head>
         {PREVIEW && <meta name="robots" content="noindex,nofollow" />}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -43,7 +43,11 @@ export default function WebLayout() {
 
       {/* Topbar */}
       <View style={styles.navbar}>
-        <TouchableOpacity onPress={() => router.push("/")} accessibilityRole="link" accessibilityLabel="Gå til forsiden">
+        <TouchableOpacity
+          onPress={() => router.push("/")}
+          accessibilityRole="link"
+          accessibilityLabel="Gå til forsiden"
+        >
           <View style={styles.brandRow}>
             <Text style={styles.brand}>Liguster</Text>
             {PREVIEW && <Text style={styles.previewPill}>Preview</Text>}
@@ -51,15 +55,37 @@ export default function WebLayout() {
         </TouchableOpacity>
 
         <View style={styles.navRight}>
-          {!isLoading && (
+          {!loading && (
             <>
               {isAuthed ? (
                 <>
-                  <Link href="/(protected)/Nabolag" style={styles.navLink} aria-label="Opslag">Opslag</Link>
-                  <Link href="/(protected)/ForeningerScreen" style={styles.navLink} aria-label="Forening">Forening</Link>
-                  <Link href="/(protected)/Beskeder" style={styles.navLink} aria-label="Beskeder">Beskeder</Link>
+                  <Link
+                    href="/(protected)/Nabolag"
+                    style={styles.navLink}
+                    aria-label="Nabolag"
+                  >
+                    Nabolag
+                  </Link>
+                  <Link
+                    href="/(protected)/ForeningerScreen"
+                    style={styles.navLink}
+                    aria-label="Forening"
+                  >
+                    Forening
+                  </Link>
+                  <Link
+                    href="/(protected)/Beskeder"
+                    style={styles.navLink}
+                    aria-label="Beskeder"
+                  >
+                    Beskeder
+                  </Link>
 
-                  <TouchableOpacity style={styles.loginBtn} onPress={handleSignOut} accessibilityRole="button">
+                  <TouchableOpacity
+                    style={styles.loginBtn}
+                    onPress={handleSignOut}
+                    accessibilityRole="button"
+                  >
                     <Text style={styles.loginBtnText}>Log ud</Text>
                   </TouchableOpacity>
                 </>
@@ -72,7 +98,6 @@ export default function WebLayout() {
                   >
                     <Text style={styles.loginBtnText}>Log ind</Text>
                   </TouchableOpacity>
-                  {/* Opret bruger fjernet her */}
                 </>
               )}
             </>
@@ -82,30 +107,41 @@ export default function WebLayout() {
 
       {/* Side-indhold */}
       <ScrollView contentContainerStyle={styles.content}>
-        <Slot />
+        <View style={styles.container}>
+          <Slot />
+        </View>
       </ScrollView>
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Text style={styles.copy}>© {new Date().getFullYear()} Liguster</Text>
+        <View style={[styles.container, { width: "100%" }]}>
+          <Text style={styles.copy}>© {new Date().getFullYear()} Liguster</Text>
 
-        <View style={styles.footerLinks}>
-          {!isLoading && (
-            <>
-              {isAuthed ? (
-                <>
-                  <Link href="/(protected)/Nabolag" style={styles.footerLink}>Opslag</Link>
-                  <Link href="/(protected)/ForeningerScreen" style={styles.footerLink}>Forening</Link>
-                  <Link href="/(protected)/Beskeder" style={styles.footerLink}>Beskeder</Link>
-                </>
-              ) : (
-                <>
-                  <Link href="/LoginScreen" style={styles.footerLink}>Log ind</Link>
-                  {/* Opret bruger fjernet her */}
-                </>
-              )}
-            </>
-          )}
+          <View style={styles.footerLinks}>
+            {!loading && (
+              <>
+                {isAuthed ? (
+                  <>
+                    <Link href="/(protected)/Nabolag" style={styles.footerLink}>
+                      Nabolag
+                    </Link>
+                    <Link href="/(protected)/ForeningerScreen" style={styles.footerLink}>
+                      Forening
+                    </Link>
+                    <Link href="/(protected)/Beskeder" style={styles.footerLink}>
+                      Beskeder
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/LoginScreen" style={styles.footerLink}>
+                      Log ind
+                    </Link>
+                  </>
+                )}
+              </>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -114,6 +150,14 @@ export default function WebLayout() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: "#0f1623" },
+
+  // centrering/width til indhold
+  container: {
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
+    paddingHorizontal: 24,
+  },
 
   previewBanner: {
     backgroundColor: "#1f2937",
@@ -149,20 +193,24 @@ const styles = StyleSheet.create({
   },
   navRight: { flexDirection: "row", alignItems: "center", gap: 16 },
   navLink: { color: "#cbd5e1", fontSize: 14 },
-  loginBtn: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: "#334155", borderRadius: 10 },
+  loginBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 10,
+  },
   loginBtnText: { color: "#e2e8f0", fontWeight: "600" },
 
-  content: { paddingBottom: 32 },
+  content: { paddingBottom: 32, paddingTop: 16 },
 
   footer: {
     borderTopWidth: 1,
     borderTopColor: "#1e293b",
     backgroundColor: "#0b1220",
-    paddingHorizontal: 24,
     paddingVertical: 18,
-    gap: 10,
   },
-  copy: { color: "#64748b", fontSize: 12 },
+  copy: { color: "#64748b", fontSize: 12, marginBottom: 8 },
   footerLinks: { flexDirection: "row", gap: 16 },
   footerLink: { color: "#cbd5e1", fontSize: 13 },
 });
