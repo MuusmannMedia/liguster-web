@@ -1,2 +1,7 @@
 // app/(public)/_layout.tsx
-export { default } from "./_layout.web";
+import { Slot } from "expo-router";
+
+export default function PublicNativeLayout() {
+  // Samme her – ingen redirect
+  return <Slot />;
+}
