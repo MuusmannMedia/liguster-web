@@ -9,35 +9,32 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import LogoNEG from "../assets/images/Liguster-logo-NEG.png";
 
-export default function IndexWeb() {
+// IMPORTANT: use an import so Metro can bundle it
+import LogoNEG from "../../assets/images/Liguster-logo-NEG.png";
+
+export default function LandingPage() {
   const router = useRouter();
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      <Image source={LogoNEG} style={styles.heroImage} resizeMode="contain" />
+    <ScrollView style={styles.page} contentContainerStyle={styles.container}>
+      {/* Hero logo */}
+      <Image source={LogoNEG} style={styles.logo} resizeMode="contain" />
 
+      {/* Copy */}
       <Text style={styles.title}>Velkommen til Liguster</Text>
       <Text style={styles.subtitle}>
         Din lokale platform for fællesskab, hjælp og genbrug 🌱
       </Text>
 
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={styles.btn}
-          onPress={() => router.push("/LoginScreen")}
-        >
-          <Text style={styles.btnText}>Log ind</Text>
+      {/* CTAs */}
+      <View style={styles.btnRow}>
+        <TouchableOpacity style={styles.btnPrimary} onPress={() => router.push("/LoginScreen")}>
+          <Text style={styles.btnPrimaryText}>Log ind</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={[styles.btn, styles.btnSecondary]}
-          onPress={() => router.push("/OpretBruger")}
-        >
-          <Text style={styles.btnText}>Opret bruger</Text>
+        <TouchableOpacity style={styles.btnSecondary} onPress={() => router.push("/OpretBruger")}>
+          <Text style={styles.btnSecondaryText}>Opret bruger</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -45,13 +42,38 @@ export default function IndexWeb() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0f1623" },
-  container: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 20 },
-  heroImage: { width: 240, height: 240, marginBottom: 30 },
-  title: { fontSize: 28, fontWeight: "800", color: "#fff", marginBottom: 10, textAlign: "center" },
-  subtitle: { fontSize: 16, color: "#cbd5e1", marginBottom: 30, textAlign: "center", maxWidth: 500 },
-  buttons: { flexDirection: "row", gap: 16 },
-  btn: { backgroundColor: "#ffffff", paddingHorizontal: 22, paddingVertical: 14, borderRadius: 10 },
-  btnSecondary: { backgroundColor: "#94a3b8" },
-  btnText: { color: "#0f1623", fontWeight: "700", fontSize: 16 },
+  page: { flex: 1, backgroundColor: "#0f1623" },
+  container: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 48,
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  logo: { width: 180, height: 180, marginBottom: 8 },
+  title: { color: "#fff", fontSize: 26, fontWeight: "800", textAlign: "center" },
+  subtitle: {
+    color: "#cbd5e1",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 18,
+    maxWidth: 560,
+  },
+  btnRow: { flexDirection: "row", gap: 12, marginTop: 4 },
+  btnPrimary: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  btnPrimaryText: { color: "#0f1623", fontSize: 16, fontWeight: "700" },
+  btnSecondary: {
+    backgroundColor: "#94a3b8",
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  btnSecondaryText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
