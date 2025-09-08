@@ -48,12 +48,12 @@ const SHADOW = {
 };
 const distances = [1, 2, 3, 5, 10, 20, 50];
 
-/* Nyt: samlet layout til web-banen */
+/* Layout til web-banen */
 const LAYOUT = {
-  CONTAINER_MAX_W: 1180, // max bredde for indhold
-  SIDE_PADDING: 24,      // padding i containeren
-  ITEM_GAP: 16,          // afstand mellem kort
-  MAX_CARD_W: 560,       // max bredde når der kun er 1 kolonne
+  CONTAINER_MAX_W: 1180,
+  SIDE_PADDING: 24,
+  ITEM_GAP: 16,
+  MAX_CARD_W: 560,
 };
 
 /* ───────────────────────────────  Hjælpere  ─────────────────────────────── */
@@ -398,13 +398,15 @@ export default function NabolagWeb() {
   const [detaljeVisible, setDetaljeVisible] = useState(false);
   const [valgtOpslag, setValgtOpslag] = useState<Post | null>(null);
 
-  // Responsivt grid + smal bane
+  // Maks 3 kolonner (ellers 2/1 på small)
   const { width } = useWindowDimensions();
-  const numColumns = width >= 1200 ? 4 : width >= 980 ? 3 : width >= 720 ? 2 : 1;
+  const containerInnerW = Math.min(width, LAYOUT.CONTAINER_MAX_W) - LAYOUT.SIDE_PADDING * 2;
+  const numColumns =
+    containerInnerW >= 980 ? 3 : containerInnerW >= 660 ? 2 : 1; // ← cap = 3
   const isGrid = numColumns > 1;
   const itemWidth = isGrid
-    ? (Math.min(width, LAYOUT.CONTAINER_MAX_W) - LAYOUT.SIDE_PADDING * 2 - LAYOUT.ITEM_GAP * (numColumns - 1)) / numColumns
-    : Math.min(LAYOUT.MAX_CARD_W, width - LAYOUT.SIDE_PADDING * 2);
+    ? (containerInnerW - LAYOUT.ITEM_GAP * (numColumns - 1)) / numColumns
+    : Math.min(LAYOUT.MAX_CARD_W, containerInnerW);
 
   const distanceText = useMemo(() => {
     if (!valgtOpslag || !userLocation || !valgtOpslag.latitude || !valgtOpslag.longitude) return null;
@@ -429,7 +431,7 @@ export default function NabolagWeb() {
           setValgtOpslag(item);
           setDetaljeVisible(true);
         }}
-        style={{ width: itemWidth, marginBottom: 16 }}
+        style={{ width: itemWidth, marginBottom: 16, alignSelf: isGrid ? "auto" : "center" }}
         activeOpacity={0.9}
       >
         <View style={styles.card}>
@@ -484,12 +486,13 @@ export default function NabolagWeb() {
             contentContainerStyle={{
               paddingTop: 12,
               paddingBottom: 56,
-              paddingHorizontal: LAYOUT.SIDE_PADDING,
-              alignItems: "center",
+              alignItems: "stretch",
             }}
             keyboardShouldPersistTaps="handled"
             numColumns={isGrid ? numColumns : 1}
-            columnWrapperStyle={isGrid ? { gap: LAYOUT.ITEM_GAP } : undefined}
+            columnWrapperStyle={
+              isGrid ? { gap: LAYOUT.ITEM_GAP, justifyContent: "flex-start" } : undefined
+            }
             renderItem={renderItem}
             ListEmptyComponent={<Text style={{ color: COLORS.sub, marginTop: 22 }}>Ingen opslag fundet.</Text>}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#fff"]} />}
@@ -529,7 +532,6 @@ const styles = StyleSheet.create({
 
   h1: { color: COLORS.text, fontSize: 28, fontWeight: "800", marginBottom: 8 },
 
-  /* CTA */
   primaryCta: {
     width: "100%",
     backgroundColor: COLORS.blue,
@@ -544,7 +546,6 @@ const styles = StyleSheet.create({
   },
   primaryCtaText: { color: COLORS.white, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
 
-  /* Filtre */
   filterRow: {
     width: "100%",
     flexDirection: "row",
@@ -588,7 +589,6 @@ const styles = StyleSheet.create({
   },
   radiusBtnText: { color: COLORS.white, fontWeight: "bold", fontSize: 15, letterSpacing: 1 },
 
-  /* Cards */
   card: {
     width: "100%",
     backgroundColor: COLORS.card,
@@ -611,7 +611,6 @@ const styles = StyleSheet.create({
   cardTeaser: { fontSize: 13, color: "#475569", marginTop: 3 },
   distance: { fontSize: 11, color: "#6b7280", marginTop: 4 },
 
-  /* Inputs i dialog */
   input: {
     backgroundColor: "#fff",
     borderRadius: 8,
