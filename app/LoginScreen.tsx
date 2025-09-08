@@ -41,6 +41,7 @@ export default function LoginScreen() {
       Alert.alert('Login fejlede', error.message);
       return;
     }
+    // Native -> til den delte route "Nabolag" (fallback peger på Nabolag.native)
     router.replace('/Nabolag');
   };
 
@@ -49,6 +50,7 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: 'height' })}
+        keyboardVerticalOffset={Platform.select({ ios: 0, android: 0 })}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <SafeAreaView style={styles.safe}>
@@ -109,7 +111,7 @@ const styles = StyleSheet.create({
 
   centered: {
     flex: 1,
-    justifyContent: 'center', // <-- centrerer vertikalt i det synlige område
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
