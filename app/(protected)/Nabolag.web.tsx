@@ -25,7 +25,7 @@ import { supabase } from "../../utils/supabase";
 
 /* ─────────────────────────  Tema/konstanter (match app)  ───────────────────────── */
 const COLORS = {
-  bg: "#0f1623",
+  bg: "#0f1623",          // mørk webbaggrund
   pane: "#111827",
   text: "#e5e7eb",
   sub: "#94a3b8",
@@ -64,7 +64,11 @@ function KategoriSelector({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <TouchableOpacity style={styles.iconBtn} onPress={() => setOpen(true)} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.iconBtn}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.85}
+      >
         <Text style={styles.iconBtnText}>▼</Text>
       </TouchableOpacity>
 
@@ -74,10 +78,7 @@ function KategoriSelector({
             <Text style={dialogStyles.title}>Vælg kategori</Text>
             <TouchableOpacity
               style={[dialogStyles.option, value === null && dialogStyles.selectedOption]}
-              onPress={() => {
-                onChange(null);
-                setOpen(false);
-              }}
+              onPress={() => { onChange(null); setOpen(false); }}
             >
               <Text style={{ fontWeight: value === null ? "bold" : "normal" }}>Alle</Text>
             </TouchableOpacity>
@@ -85,10 +86,7 @@ function KategoriSelector({
               <TouchableOpacity
                 key={k}
                 style={[dialogStyles.option, value === k && dialogStyles.selectedOption]}
-                onPress={() => {
-                  onChange(k);
-                  setOpen(false);
-                }}
+                onPress={() => { onChange(k); setOpen(false); }}
               >
                 <Text style={{ fontWeight: value === k ? "bold" : "normal" }}>{k}</Text>
               </TouchableOpacity>
@@ -125,10 +123,7 @@ function RadiusSelector({
               <TouchableOpacity
                 key={d}
                 style={[dialogStyles.option, d === value && dialogStyles.selectedOption]}
-                onPress={() => {
-                  onChange(d);
-                  setOpen(false);
-                }}
+                onPress={() => { onChange(d); setOpen(false); }}
               >
                 <Text style={{ fontWeight: d === value ? "bold" : "normal" }}>{d} km</Text>
               </TouchableOpacity>
@@ -167,6 +162,7 @@ function OpretOpslagWeb({
   const canSubmit = overskrift.trim().length > 0 && text.trim().length > 0 && !saving;
 
   const pickImage = async () => {
+    // Web: Expo ImagePicker åbner systemets file picker
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: false,
@@ -177,6 +173,7 @@ function OpretOpslagWeb({
     const asset = (res as any)?.assets?.[0];
     if (!asset?.uri) return;
 
+    // Komprimer let (web/native ens)
     const manipulated = await ImageManipulator.manipulateAsync(
       asset.uri,
       [{ resize: { width: 1600 } }],
@@ -195,9 +192,10 @@ function OpretOpslagWeb({
     try {
       setSaving(true);
 
+      // Upload billede hvis valgt
       let image_url: string | null = null;
       if (imageBase64) {
-        const BUCKET = "foreningsbilleder";
+        const BUCKET = "foreningsbilleder"; // eller dit “public”/”posts”-bucket
         const filePath = `posts/${currentUserId}/${Date.now()}.jpg`;
         const { error: upErr } = await supabase.storage
           .from(BUCKET)
@@ -210,6 +208,7 @@ function OpretOpslagWeb({
         image_url = data?.publicUrl ?? null;
       }
 
+      // Send payload videre til hooks’ createPost (supabase insert håndteres dér)
       await onSubmit({
         overskrift: overskrift.trim(),
         text: text.trim(),
@@ -218,12 +217,9 @@ function OpretOpslagWeb({
         image_url,
       });
 
-      setOverskrift("");
-      setText("");
-      setOmraade("");
-      setKategori(null);
-      setImagePreview(null);
-      setImageBase64(null);
+      // Ryd og luk
+      setOverskrift(""); setText(""); setOmraade(""); setKategori(null);
+      setImagePreview(null); setImageBase64(null);
       onClose();
     } catch (e: any) {
       alert(e?.message || "Kunne ikke oprette opslag.");
@@ -262,6 +258,7 @@ function OpretOpslagWeb({
               onChangeText={setOmraade}
             />
 
+            {/* Kategori dropdown light */}
             <View style={{ marginTop: 6, marginBottom: 10 }}>
               <Text style={styles.label}>Kategori</Text>
               <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -276,14 +273,12 @@ function OpretOpslagWeb({
               </View>
             </View>
 
+            {/* Billede */}
             {imagePreview ? (
               <View style={{ marginTop: 8 }}>
                 <Image source={{ uri: imagePreview }} style={styles.preview} />
                 <TouchableOpacity
-                  onPress={() => {
-                    setImagePreview(null);
-                    setImageBase64(null);
-                  }}
+                  onPress={() => { setImagePreview(null); setImageBase64(null); }}
                   style={[styles.smallBtn, styles.grayBtn, { alignSelf: "flex-start", marginTop: 8 }]}
                 >
                   <Text style={styles.smallBtnText}>Fjern billede</Text>
@@ -413,17 +408,15 @@ export default function NabolagWeb() {
   }, [valgtOpslag, userLocation]);
 
   const renderItem = ({ item, index }: { item: Post; index: number }) => {
-    const showDistance = !!userLocation && !!item.latitude && !!item.longitude;
+    const showDistance =
+      !!userLocation && !!item.latitude && !!item.longitude;
     const d = showDistance
       ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!)
       : NaN;
 
     return (
       <TouchableOpacity
-        onPress={() => {
-          setValgtOpslag(item);
-          setDetaljeVisible(true);
-        }}
+        onPress={() => { setValgtOpslag(item); setDetaljeVisible(true); }}
         style={{ width: isGrid ? itemWidth : "100%", maxWidth: isGrid ? undefined : 820, marginBottom: 18 }}
         activeOpacity={0.9}
       >
@@ -450,12 +443,18 @@ export default function NabolagWeb() {
   return (
     <View style={styles.page}>
       <View style={styles.container}>
+        {/* Header/CTA */}
         <Text style={styles.h1}>Nabolag</Text>
 
-        <TouchableOpacity style={styles.primaryCta} onPress={() => setOpretVisible(true)} activeOpacity={0.88}>
+        <TouchableOpacity
+          style={styles.primaryCta}
+          onPress={() => setOpretVisible(true)}
+          activeOpacity={0.88}
+        >
           <Text style={styles.primaryCtaText}>OPRET OPSLAG</Text>
         </TouchableOpacity>
 
+        {/* Filtre */}
         <View style={styles.filterRow}>
           <TextInput
             value={searchQuery}
@@ -469,6 +468,7 @@ export default function NabolagWeb() {
           <RadiusSelector value={radius} onChange={handleRadiusChange} />
         </View>
 
+        {/* Liste */}
         {loading ? (
           <ActivityIndicator size="large" color="#cbd5e1" style={{ marginTop: 30 }} />
         ) : (
@@ -486,17 +486,22 @@ export default function NabolagWeb() {
             numColumns={isGrid ? numColumns : 1}
             columnWrapperStyle={isGrid ? { gap: ITEM_GAP } : undefined}
             renderItem={renderItem}
-            ListEmptyComponent={<Text style={{ color: COLORS.sub, marginTop: 22 }}>Ingen opslag fundet.</Text>}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#fff"]} />}
+            ListEmptyComponent={
+              <Text style={{ color: COLORS.sub, marginTop: 22 }}>Ingen opslag fundet.</Text>
+            }
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#fff"]} />
+            }
           />
         )}
       </View>
 
+      {/* Modaler */}
       <OpretOpslagWeb
         visible={opretVisible}
         onClose={() => setOpretVisible(false)}
         onSubmit={async (payload) => {
-          await createPost(payload);
+          await createPost(payload); // bruger den samme hook-logik
         }}
         currentUserId={userId}
       />
@@ -524,6 +529,7 @@ const styles = StyleSheet.create({
 
   h1: { color: COLORS.text, fontSize: 28, fontWeight: "800", marginBottom: 8 },
 
+  /* CTA */
   primaryCta: {
     width: "100%",
     backgroundColor: COLORS.blue,
@@ -538,6 +544,7 @@ const styles = StyleSheet.create({
   },
   primaryCtaText: { color: COLORS.white, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
 
+  /* Filtre */
   filterRow: {
     width: "100%",
     flexDirection: "row",
@@ -581,6 +588,7 @@ const styles = StyleSheet.create({
   },
   radiusBtnText: { color: COLORS.white, fontWeight: "bold", fontSize: 15, letterSpacing: 1 },
 
+  /* Cards */
   card: {
     width: "100%",
     backgroundColor: COLORS.card,
@@ -603,6 +611,7 @@ const styles = StyleSheet.create({
   cardTeaser: { fontSize: 14, color: "#444", marginTop: 3 },
   distance: { fontSize: 11, color: "#6b7280", marginTop: 4 },
 
+  /* Inputs i dialog */
   input: {
     backgroundColor: "#fff",
     borderRadius: 8,
