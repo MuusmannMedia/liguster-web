@@ -23,20 +23,19 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* ─────────────────────────  Tema/konstanter  ───────────────────────── */
+/* ─────────────────────────  Tema  ───────────────────────── */
 const COLORS = {
-  bg: "#7C8996",          // ← ønsket lysere blå baggrund
-  pane: "#111827",
+  bg: "#7C8996",       // ← korrekt sidebaggrund
   text: "#131921",
   sub: "#2b3440",
-  white: "#fff",
+  white: "#ffffff",
   blue: "#131921",
   blueTint: "#25489022",
-  fieldBorder: "#1f2937",
+  fieldBorder: "#b9c4cf",
   card: "#ffffff",
   cardText: "#131921",
 };
-const RADII = { sm: 8, md: 10, lg: 14, xl: 18 };
+const RADII = { sm: 8, md: 10, lg: 14 };
 const SHADOW = {
   card: {
     shadowColor: "#000",
@@ -46,19 +45,18 @@ const SHADOW = {
     elevation: 2,
   },
 };
-const distances = [1, 2, 3, 5, 10, 20, 50];
 
-/* Layout */
 const LAYOUT = {
-  CONTAINER_MAX_W: 1180,
+  MAX_W: 1180,
   SIDE_PADDING: 24,
-  ITEM_GAP: 16,       // afstand mellem kort
-  MAX_CARD_W: 560,
+  GAP: 16, // mellem kort
 };
 
-/* ───────────────────────────────  Hjælpere  ─────────────────────────────── */
+/* ─────────────────────────  Hjælpere  ───────────────────────── */
 const fmtKm = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
+const distances = [1, 2, 3, 5, 10, 20, 50];
 
+/* ─────────────────────  Små UI-komponenter  ───────────────────── */
 function KategoriSelector({
   value,
   onChange,
@@ -80,10 +78,7 @@ function KategoriSelector({
 
             <TouchableOpacity
               style={[dialogStyles.option, value === null && dialogStyles.selectedOption]}
-              onPress={() => {
-                onChange(null);
-                setOpen(false);
-              }}
+              onPress={() => { onChange(null); setOpen(false); }}
             >
               <Text style={{ fontWeight: value === null ? "bold" : "normal" }}>Alle</Text>
             </TouchableOpacity>
@@ -92,10 +87,7 @@ function KategoriSelector({
               <TouchableOpacity
                 key={k}
                 style={[dialogStyles.option, value === k && dialogStyles.selectedOption]}
-                onPress={() => {
-                  onChange(k);
-                  setOpen(false);
-                }}
+                onPress={() => { onChange(k); setOpen(false); }}
               >
                 <Text style={{ fontWeight: value === k ? "bold" : "normal" }}>{k}</Text>
               </TouchableOpacity>
@@ -133,10 +125,7 @@ function RadiusSelector({
               <TouchableOpacity
                 key={d}
                 style={[dialogStyles.option, d === value && dialogStyles.selectedOption]}
-                onPress={() => {
-                  onChange(d);
-                  setOpen(false);
-                }}
+                onPress={() => { onChange(d); setOpen(false); }}
               >
                 <Text style={{ fontWeight: d === value ? "bold" : "normal" }}>{d} km</Text>
               </TouchableOpacity>
@@ -151,7 +140,7 @@ function RadiusSelector({
   );
 }
 
-/* ─────────────────────  Opret opslag (web-dialog)  ───────────────────── */
+/* ─────────────────────  Opret opslag (web)  ───────────────────── */
 function OpretOpslagWeb({
   visible,
   onClose,
@@ -391,19 +380,11 @@ export default function NabolagWeb() {
   const [detaljeVisible, setDetaljeVisible] = useState(false);
   const [valgtOpslag, setValgtOpslag] = useState<Post | null>(null);
 
-  // Breakpoints: maks 3 kolonner (ellers 2/1), og undgå afrundings-overflow
+  // Breakpoints – MAKS 3 kolonner (ellers 2/1)
   const { width } = useWindowDimensions();
-  const containerInnerW = Math.min(width, LAYOUT.CONTAINER_MAX_W) - LAYOUT.SIDE_PADDING * 2;
-  const numColumns = containerInnerW >= 980 ? 3 : containerInnerW >= 660 ? 2 : 1;
+  const innerW = Math.min(width, LAYOUT.MAX_W) - LAYOUT.SIDE_PADDING * 2;
+  const numColumns = innerW >= 980 ? 3 : innerW >= 660 ? 2 : 1;
   const isGrid = numColumns > 1;
-
-  const rowGap = LAYOUT.ITEM_GAP;
-  const colHalfGap = rowGap / 2;
-
-  // Hårdt golv (floor) så 3*itemWidth + gaps aldrig overstiger containeren pga. decimaler
-  const itemWidth = isGrid
-    ? Math.floor((containerInnerW - rowGap * (numColumns - 1)) / numColumns)
-    : Math.min(LAYOUT.MAX_CARD_W, containerInnerW);
 
   const distanceText = useMemo(() => {
     if (!valgtOpslag || !userLocation || !valgtOpslag.latitude || !valgtOpslag.longitude) return null;
@@ -423,33 +404,30 @@ export default function NabolagWeb() {
       : NaN;
 
     return (
-      <TouchableOpacity
-        onPress={() => { setValgtOpslag(item); setDetaljeVisible(true); }}
-        style={{
-          width: itemWidth,
-          marginBottom: rowGap,
-          marginHorizontal: isGrid ? colHalfGap : 0,
-          alignSelf: isGrid ? "auto" : "center",
-        }}
-        activeOpacity={0.9}
-      >
-        <View style={styles.card}>
-          {!!item.image_url && <Image source={{ uri: item.image_url }} style={styles.cardImage} />}
-          {!!item.kategori && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{item.kategori}</Text>
-            </View>
-          )}
-          <Text style={styles.cardTitle}>{item.overskrift}</Text>
-          {!!item.omraade && <Text style={styles.cardPlace}>{item.omraade}</Text>}
-          {!!item.text && (
-            <Text style={styles.cardTeaser} numberOfLines={1} ellipsizeMode="tail">
-              {item.text}
-            </Text>
-          )}
-          {showDistance ? <Text style={styles.distance}>{fmtKm(d)} væk</Text> : null}
-        </View>
-      </TouchableOpacity>
+      <View style={styles.cardWrap}>
+        <TouchableOpacity
+          onPress={() => { setValgtOpslag(item); setDetaljeVisible(true); }}
+          activeOpacity={0.9}
+          style={{ width: "100%" }}
+        >
+          <View style={styles.card}>
+            {!!item.image_url && <Image source={{ uri: item.image_url }} style={styles.cardImage} />}
+            {!!item.kategori && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{item.kategori}</Text>
+              </View>
+            )}
+            <Text style={styles.cardTitle}>{item.overskrift}</Text>
+            {!!item.omraade && <Text style={styles.cardPlace}>{item.omraade}</Text>}
+            {!!item.text && (
+              <Text style={styles.cardTeaser} numberOfLines={1} ellipsizeMode="tail">
+                {item.text}
+              </Text>
+            )}
+            {showDistance ? <Text style={styles.distance}>{fmtKm(d)} væk</Text> : null}
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -458,7 +436,7 @@ export default function NabolagWeb() {
       <View style={styles.container}>
         <Text style={styles.h1}>Nabolag</Text>
 
-        <TouchableOpacity style={styles.primaryCta} onPress={() => setOpretVisible(true)} activeOpacity={0.88}>
+        <TouchableOpacity style={styles.primaryCta} onPress={() => setOpretVisible(true)}>
           <Text style={styles.primaryCtaText}>OPRET OPSLAG</Text>
         </TouchableOpacity>
 
@@ -468,7 +446,7 @@ export default function NabolagWeb() {
             onChangeText={setSearchQuery}
             style={styles.searchInput}
             placeholder="Søg i opslag…"
-            placeholderTextColor="#2b3440"
+            placeholderTextColor="#6b7280"
             returnKeyType="search"
           />
           <KategoriSelector value={kategoriFilter} onChange={setKategoriFilter} />
@@ -481,18 +459,25 @@ export default function NabolagWeb() {
           <FlatList
             data={filteredPosts}
             keyExtractor={(item) => item.id}
-            style={{ width: "100%", alignSelf: "center" }}
+            style={{ width: "100%" }}
             contentContainerStyle={{
               paddingTop: 12,
               paddingBottom: 56,
-              // “halv-gap” trick så grid aldrig stikker ud i højre side
-              paddingHorizontal: LAYOUT.SIDE_PADDING - (isGrid ? colHalfGap : 0),
-              alignItems: isGrid ? "stretch" : "center",
-              rowGap,
+              paddingHorizontal: LAYOUT.SIDE_PADDING,
+              alignItems: "stretch",
+              rowGap: LAYOUT.GAP,
             }}
             keyboardShouldPersistTaps="handled"
             numColumns={isGrid ? numColumns : 1}
-            // vi bruger margen på items i stedet for gap her (mere stabilt på RN Web)
+            // Stabil grid uden overflow:
+            columnWrapperStyle={
+              isGrid
+                ? {
+                    justifyContent: "space-between", // fordeler 3/2 kolonner jævnt
+                    columnGap: LAYOUT.GAP, // RN web forstår columnGap (fallback via cardWrap margins)
+                  } as any
+                : undefined
+            }
             renderItem={renderItem}
             ListEmptyComponent={<Text style={{ color: COLORS.sub, marginTop: 22 }}>Ingen opslag fundet.</Text>}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#131921"]} />}
@@ -517,11 +502,11 @@ export default function NabolagWeb() {
   );
 }
 
-/* ─────────────────────────────────────  Styles  ───────────────────────────────────── */
+/* ─────────────────────────  Styles  ───────────────────────── */
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.bg },
   container: {
-    maxWidth: LAYOUT.CONTAINER_MAX_W,
+    maxWidth: LAYOUT.MAX_W,
     width: "100%",
     alignSelf: "center",
     paddingHorizontal: LAYOUT.SIDE_PADDING,
@@ -530,7 +515,6 @@ const styles = StyleSheet.create({
 
   h1: { color: COLORS.text, fontSize: 28, fontWeight: "800", marginBottom: 8 },
 
-  /* CTA */
   primaryCta: {
     width: "100%",
     backgroundColor: COLORS.blue,
@@ -545,7 +529,6 @@ const styles = StyleSheet.create({
   },
   primaryCtaText: { color: COLORS.white, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
 
-  /* Filtre */
   filterRow: {
     width: "100%",
     flexDirection: "row",
@@ -556,14 +539,14 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: "#dfe6ee",
+    backgroundColor: COLORS.white, // ← lyst felt, ikke #7C8996
     borderRadius: RADII.sm,
     paddingHorizontal: 15,
     paddingVertical: 12,
     fontSize: 15,
     color: COLORS.text,
     borderWidth: 1.5,
-    borderColor: "#b9c4cf",
+    borderColor: COLORS.fieldBorder,
   },
   iconBtn: {
     height: 45,
@@ -589,9 +572,14 @@ const styles = StyleSheet.create({
   },
   radiusBtnText: { color: COLORS.white, fontWeight: "bold", fontSize: 15, letterSpacing: 1 },
 
-  /* Cards */
+  // Wrapper så rækker kan bruge space-between uden at items hænger i højre side
+  cardWrap: {
+    flex: 1,                 // deler rækken ligeligt (RN Web numColumns)
+    minWidth: 260,           // så 2+1 breakpoints giver pæne knæk
+    maxWidth: 360,           // og kort ikke bliver monstrøst brede
+  },
+
   card: {
-    width: "100%",
     backgroundColor: COLORS.card,
     borderRadius: RADII.lg,
     padding: 12,
@@ -608,11 +596,11 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: COLORS.cardText, fontWeight: "bold", fontSize: 13 },
   cardTitle: { fontWeight: "800", fontSize: 15, marginBottom: 2, color: COLORS.cardText },
-  cardPlace: { fontSize: 12, color: "#64748b", marginBottom: 2 },
+  cardPlace: { fontSize: 12, color: "#556374", marginBottom: 2 },
   cardTeaser: { fontSize: 13, color: "#475569", marginTop: 3 },
   distance: { fontSize: 11, color: "#6b7280", marginTop: 4 },
 
-  /* Inputs i dialog */
+  /* Dialog inputs */
   input: {
     backgroundColor: "#fff",
     borderRadius: 8,
