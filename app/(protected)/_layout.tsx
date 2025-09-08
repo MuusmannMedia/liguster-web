@@ -10,34 +10,32 @@ export default function ProtectedLayout() {
   const userId = session?.user?.id;
 
   // Registrér push-token efter login (no-op på web/simulator)
+  // (Vi bruger ikke returværdien her, men hooken initialiserer sig selv.)
   useRegisterPushToken(userId ?? undefined);
 
-  // Vis en lille loader mens vi afklarer sessionen
+  // Loader mens session afklares
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="small" />
+        <ActivityIndicator color="#fff" />
       </View>
     );
   }
 
-  // Ingen session -> hop til login (public)
+  // Ingen session -> tilbage til public (web håndterer selv redirect til Nabolag)
   if (!session) {
-    return <Redirect href="/LoginScreen" />;
+    return <Redirect href="/(public)" />;
   }
 
-  // Beskyttet stak (native). Skjul headers; start på Nabolag.
-  return (
-    <Stack
-      initialRouteName="Nabolag"
-      screenOptions={{
-        headerShown: false,
-        animation: "default",
-      }}
-    />
-  );
+  // Beskyttet stack (native). Skjuler headers.
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0f1623",
+  },
 });

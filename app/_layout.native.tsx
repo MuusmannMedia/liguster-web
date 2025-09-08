@@ -6,12 +6,14 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { StyleSheet, View } from "react-native";
 
-import { useColorScheme } from "@/hooks/useColorScheme";
-import { useRegisterPushToken } from "@/hooks/useRegisterPushToken";
-import { useSession } from "@/hooks/useSession";
+// Brug relative imports for at undgå alias-problemer i Metro
+import { useColorScheme } from "../hooks/useColorScheme";
+import useRegisterPushToken from "../hooks/useRegisterPushToken"; // <-- DEFAULT import!
+import { useSession } from "../hooks/useSession";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
@@ -19,7 +21,7 @@ export default function RootLayout() {
   const { session } = useSession();
   const userId = session?.user?.id ?? null;
 
-  // Registrer push når bruger er logget ind
+  // Registrér push-token når bruger er logget ind (no-op på web; denne fil er native)
   useRegisterPushToken(userId ?? undefined);
 
   if (!loaded) return null;

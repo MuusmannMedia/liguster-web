@@ -1,8 +1,8 @@
-// app/LoginScreen.web.tsx
+// app/(public)/LoginScreen.web.tsx
 import { Link, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { supabase } from "../utils/supabase";
+import { supabase } from "../../utils/supabase"; // <-- RET STi (to dots op)
 
 export const options = { headerShown: false };
 
@@ -26,7 +26,7 @@ export default function LoginScreenWeb() {
       Alert.alert("Login fejlede", error.message);
       return;
     }
-    router.replace("/Nabolag");
+    router.replace("/(protected)/Nabolag");
   };
 
   return (
@@ -77,8 +77,7 @@ export default function LoginScreenWeb() {
 
 const styles = StyleSheet.create({
   page: {
-    // brug web-venligt centreringslayout uden HTML <form> og uden special-CSS
-    minHeight: "100vh" as any, // RNW accepterer string-værdier på web
+    minHeight: "100vh" as any,
     backgroundColor: "#171C22",
     alignItems: "center",
     justifyContent: "center",

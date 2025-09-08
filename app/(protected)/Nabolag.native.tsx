@@ -15,12 +15,12 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import BottomNav from "../components/BottomNav";
-import OpretOpslagDialog from "../components/OpretOpslagDialog";
-import OpslagDetaljeModal from "../components/OpslagDetaljeModal";
-import SvarModal from "../components/SvarModal";
-import { KATEGORIER, Post, useNabolag } from "../hooks/useNabolag";
-import { supabase } from "../utils/supabase";
+import BottomNav from "../../components/BottomNav";
+import OpretOpslagDialog from "../../components/OpretOpslagDialog";
+import OpslagDetaljeModal from "../../components/OpslagDetaljeModal";
+import SvarModal from "../../components/SvarModal";
+import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
+import { supabase } from "../../utils/supabase";
 
 /* ─────────────────────────────────  Konstanter / tema  ───────────────────────────────── */
 const COLORS = {
@@ -259,9 +259,7 @@ export default function Nabolag() {
                   </View>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>Ingen opslag fundet.</Text>
-              }
+              ListEmptyComponent={<Text style={styles.emptyText}>Ingen opslag fundet.</Text>}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.blue]} />
               }
