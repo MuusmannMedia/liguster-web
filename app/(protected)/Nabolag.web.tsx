@@ -2,7 +2,7 @@
 import { decode } from "base64-arraybuffer";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -23,28 +23,33 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* ───────────────────────── TEMA & LAYOUT (🔧 skift farver/spacing her) ───────────────────────── */
+/* ─────────────────────────  TEMA & LAYOUT  ─────────────────────────
+   🔧 Skift farver/spacing her
+*/
 const THEME = {
-  // 🔧 FARVER
-  pageBg: "#7C8996",       // sidebaggrund (ønsket)
-  boardBg: "#ffffff",      // “korttavle”/panel
-  ink: "#0b1220",          // primær tekst
-  sub: "#425466",          // sekundær tekst
-  line: "#d0d7de",         // streger/border
-  chipBg: "#eef2ff",       // chip baggrund
-  chipText: "#1e293b",     // chip tekst
-  btn: "#131921",          // primær knap
-  cardBg: "#ffffff",
-  cardInk: "#0f172a",
+  pageBg: "#7C8996",  // baggrund (som ønsket)
+  boardBg: "#ffffff",
+  ink:    "#0b1220",
+  sub:    "#425466",
+  line:   "#d0d7de",
+
+  chipBg:   "#eef2ff",
+  chipText: "#1e293b",
+
+  btn:      "#131921",
+
+  cardBg:   "#ffffff",
+  cardInk:  "#0f172a",
 };
 
 const RADII = { sm: 8, md: 12, lg: 16, xl: 22 };
+
 const GRID = {
-  boardMaxW: 1120,   // 🔧 max bredde på “board”
-  padX: 20,          // 🔧 horisontal padding inde i board
-  gap: 18,           // 🔧 afstand mellem kort
-  brk3: 1024,        // 3 kolonner fra denne bredde
-  brk2: 680,         // 2 kolonner fra denne bredde
+  boardMaxW: 1120, // max bredde på “board”
+  padX: 20,        // indvendig padding i board
+  gap: 18,         // afstand mellem kort
+  brk3: 1024,      // 3 kolonner fra denne bredde
+  brk2: 680,       // 2 kolonner fra denne bredde
 };
 
 const SHADOW = {
@@ -60,7 +65,7 @@ const SHADOW = {
 const distances = [1, 2, 3, 5, 10, 20, 50];
 const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* ───────────────────────── Små UI-byggestene ───────────────────────── */
+/* ─────────────────────────  Små UI-byggestene  ───────────────────────── */
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.chip}>
@@ -110,7 +115,6 @@ function RadiusPicker({ value, onChange }: { value: number; onChange: (v: number
         <Text style={styles.chipBtnText}>{value} km</Text>
         <Text style={styles.caret}>▾</Text>
       </TouchableOpacity>
-
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -130,7 +134,7 @@ function RadiusPicker({ value, onChange }: { value: number; onChange: (v: number
   );
 }
 
-/* ───────────────────────── Opret-opslag (samme logik) ───────────────────────── */
+/* ─────────────────────────  Opret-opslag  ───────────────────────── */
 function OpretOpslagWeb({
   visible, onClose, onSubmit, currentUserId,
 }: {
@@ -274,7 +278,7 @@ function OpretOpslagWeb({
   );
 }
 
-/* ───────────────────────── Detalje-modal ───────────────────────── */
+/* ─────────────────────────  Detalje-modal  ───────────────────────── */
 function OpslagDetaljeWeb({
   visible, opslag, onClose, distanceText,
 }: {
@@ -318,8 +322,11 @@ function OpslagDetaljeWeb({
   );
 }
 
-/* ───────────────────────── Skærm ───────────────────────── */
+/* ─────────────────────────  Skærm  ───────────────────────── */
 export default function NabolagWeb() {
+  // Synlig markør i konsollen så du kan se at DETTE build kører
+  useEffect(() => { console.log("%c[WEB-NABOLAG] filen er aktiv", "color:#16a34a;font-weight:900;"); }, []);
+
   const {
     userId,
     userLocation,
@@ -364,8 +371,7 @@ export default function NabolagWeb() {
   }, [selected, userLocation]);
 
   const renderItem = ({ item }: { item: Post }) => {
-    const showD =
-      !!userLocation && !!item.latitude && !!item.longitude;
+    const showD = !!userLocation && !!item.latitude && !!item.longitude;
     const d = showD
       ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!)
       : NaN;
@@ -396,11 +402,20 @@ export default function NabolagWeb() {
 
   return (
     <View style={styles.page}>
-      {/* Board */}
+      {/* BOARD */}
       <View style={[styles.board, { width: boardW }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.h1}>Nabolag</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text style={styles.h1}>Nabolag</Text>
+
+            {/* ⛳️ MIDlertidig badge så du kan se at web-filen bruges – fjern gerne */}
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>WEB-NABOLAG</Text>
+            </View>
+            {/* ← fjern ovenstående badge når du er tilfreds */}
+          </View>
+
           <TouchableOpacity style={styles.primary} onPress={() => setCreateOpen(true)}>
             <Text style={styles.primaryText}>Opret opslag</Text>
           </TouchableOpacity>
@@ -422,7 +437,7 @@ export default function NabolagWeb() {
           </View>
         </View>
 
-        {/* Grid (bruger vinduets scroll – ingen fixed højde) */}
+        {/* Grid – lader vinduet scrolle (ingen fixed højde) */}
         {loading ? (
           <ActivityIndicator size="large" color={THEME.ink} style={{ marginTop: 20 }} />
         ) : (
@@ -432,7 +447,7 @@ export default function NabolagWeb() {
             style={{ width: "100%" }}
             contentContainerStyle={{
               paddingHorizontal: GRID.padX,
-              paddingBottom: 28,
+              paddingBottom: 40, // ekstra luft nederst så siden kan scrolle
               alignItems: "center",
               width: boardW,
               alignSelf: "center",
@@ -441,14 +456,13 @@ export default function NabolagWeb() {
             columnWrapperStyle={isGrid ? { gap: GRID.gap } : undefined}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
-            // Web-venligt:
             removeClippedSubviews={false}
-            scrollEnabled={true}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={<Text style={{ color: THEME.sub, marginTop: 14 }}>Ingen opslag fundet.</Text>}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.ink]} />
             }
+            ListFooterComponent={<View style={{ height: 8 }} />}
           />
         )}
       </View>
@@ -470,9 +484,8 @@ export default function NabolagWeb() {
   );
 }
 
-/* ───────────────────────── Styles ───────────────────────── */
+/* ─────────────────────────  Styles  ───────────────────────── */
 const styles = StyleSheet.create({
-  // Siden må IKKE have fixed højde; så kan vinduet scrolle frit.
   page: {
     flex: 1,
     width: "100%",
@@ -495,6 +508,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   h1: { color: THEME.ink, fontSize: 22, fontWeight: "900" },
+
+  // midlertidig badge – OK at slette
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#e5ecff",
+    borderWidth: 1,
+    borderColor: "#c7d2fe",
+  },
+  badgeText: { color: "#1e3a8a", fontWeight: "900", fontSize: 11, letterSpacing: 0.3 },
 
   primary: {
     backgroundColor: THEME.btn,
