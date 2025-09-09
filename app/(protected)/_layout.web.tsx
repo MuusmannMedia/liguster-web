@@ -19,18 +19,18 @@ export default function ProtectedWebLayout() {
     <View style={styles.page}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Globalt: tillad scroll & fjern alt footer-indhold */}
         <style>{`
+          /* Global scroll + skjul alle footere */
           html, body, #root, #__next { height: auto !important; overflow: auto !important; }
           body { position: static !important; -webkit-overflow-scrolling: touch; }
           footer, .footer, #footer, .bottom-nav, #bottom-nav, [data-footer] { display:none !important; }
 
-          /* Vis/skjul nav-variationer rent med CSS */
-          .desktopOnly { display: none; }
-          .mobileOnly { display: flex; }
+          /* Vis/skjul med data-attributter (RNW understøtter dataSet) */
+          [data-r="desktop"] { display: none; }
+          [data-r="mobile"] { display: flex; }
           @media (min-width: 720px) {
-            .desktopOnly { display: flex; }
-            .mobileOnly { display: none; }
+            [data-r="desktop"] { display: flex; }
+            [data-r="mobile"] { display: none; }
           }
         `}</style>
       </Head>
@@ -42,9 +42,9 @@ export default function ProtectedWebLayout() {
         </TouchableOpacity>
 
         <View style={[styles.right, { gap: 16 }]}>
-          {/* DESKTOP menu (vises kun via CSS) */}
+          {/* DESKTOP menu (styres kun af CSS via data-r="desktop") */}
           {isAuthed && (
-            <View className="desktopOnly" style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+            <View dataSet={{ r: "desktop" }} style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
               <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
               <Link href="/(protected)/ForeningerScreen" style={styles.link}>Forening</Link>
               <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
@@ -54,9 +54,9 @@ export default function ProtectedWebLayout() {
             </View>
           )}
 
-          {/* MOBIL burger (vises kun via CSS) */}
+          {/* MOBIL burger (styres kun af CSS via data-r="mobile") */}
           {isAuthed && (
-            <View className="mobileOnly" style={{ position: "relative", alignItems: "center" }}>
+            <View dataSet={{ r: "mobile" }} style={{ position: "relative", alignItems: "center" }}>
               <TouchableOpacity
                 style={styles.burger}
                 onPress={() => setMenuOpen(v => !v)}
@@ -85,7 +85,7 @@ export default function ProtectedWebLayout() {
         </View>
       </View>
 
-      {/* Indhold – lad body håndtere scroll */}
+      {/* Indhold */}
       <View style={styles.content}>
         <Slot />
       </View>
