@@ -1,166 +1,140 @@
 // app/(public)/LoginScreen.web.tsx
-import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Link, router } from "expo-router";
+import React, { useState } from "react";
 import { supabase } from "../../utils/supabase";
 
-/**
- * HELT MINIMAL WEB-LOGIN
- * - Ingen ScrollView
- * - Ingen Link/Touchable udenfor kortet
- * - Ingen fixed/absolute/sticky elementer
- * - Intet KeyboardDismiss
- * - Fokus venligt (outline synlig)
- *
- * Farver kan ændres her i THEME.
- */
-const THEME = {
-  pageBg: "#7C8996",   // ← baggrund
-  cardBg: "#0b1220",
-  cardBorder: "#1f2937",
-  titleText: "#e5e7eb",
+/* 🎨 Farver du kan ændre */
+const C = {
+  pageBg: "#7C8996",
+  cardBg: "#0f1623",
+  border: "#223",
+  text: "#ffffff",
   inputBg: "#ffffff",
-  placeholder: "#6b7280",
-  btnBg: "#ffffff",
-  btnText: "#0b1220",
-  link: "#e5e7eb",
+  inputText: "#111827",
+  buttonBg: "#ffffff",
+  buttonText: "#171C22",
 };
 
 export const options = { headerShown: false };
 
 export default function LoginScreenWeb() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const passwordRef = useRef<TextInput>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const onLogin = async () => {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErr(null);
+    const form = new FormData(e.currentTarget);
+    const email = String(form.get("email") || "").trim();
+    const password = String(form.get("password") || "");
     if (!email || !password) {
-      Alert.alert("Fejl", "Udfyld både email og password.");
+      setErr("Udfyld både email og password.");
       return;
     }
-    try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      router.replace("/(protected)/Nabolag");
-    } catch (e: any) {
-      Alert.alert("Login fejlede", e?.message ?? "Ukendt fejl");
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      setErr(error.message);
+      return;
     }
-  };
+    router.replace("/(protected)/Nabolag");
+  }
 
   return (
-    <View style={styles.page} /* INGEN pointerEvents her */>
-      <View style={styles.card} /* INGEN absolute/fixed her */>
-        <Text style={styles.title}>Log ind</Text>
+    <div style={s.page}>
+      <div style={s.card}>
+        <h1 style={s.title}>Log ind</h1>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={THEME.placeholder}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          textContentType="username"
-          value={email}
-          onChangeText={setEmail}
-          autoFocus
-          returnKeyType="next"
-          onSubmitEditing={() => passwordRef.current?.focus()}
-        />
+        <form onSubmit={onSubmit} style={s.form} autoComplete="on">
+          <label style={s.label}>
+            Email
+            <input
+              name="email"
+              type="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="email"
+              required
+              style={s.input}
+            />
+          </label>
 
-        <TextInput
-          ref={passwordRef}
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={THEME.placeholder}
-          secureTextEntry
-          textContentType="password"
-          value={password}
-          onChangeText={setPassword}
-          returnKeyType="go"
-          onSubmitEditing={onLogin}
-        />
+          <label style={s.label}>
+            Password
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              style={s.input}
+            />
+          </label>
 
-        <TouchableOpacity style={styles.button} onPress={onLogin} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? "Logger ind…" : "LOG IND"}</Text>
-        </TouchableOpacity>
+          {err && <div style={s.error}>{err}</div>}
 
-        <TouchableOpacity onPress={() => router.replace("/")} style={{ marginTop: 14 }}>
-          <Text style={styles.backLink}>‹ Til forsiden</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+          <button type="submit" style={s.button} disabled={loading}>
+            {loading ? "Logger ind…" : "LOG IND"}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 12 }}>
+          <Link href="/" style={{ color: "#cbd5e1", textDecorationLine: "none" }}>
+            ‹ Til forsiden
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
-const styles = StyleSheet.create({
+/* Ren CSS-in-JS så vi ikke rammer RNW-quirks */
+const s: Record<string, React.CSSProperties> = {
   page: {
-    flex: 1,
-    backgroundColor: THEME.pageBg,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    minHeight: "calc(100vh - 64px - 60px)", // 64 topbar + 60 footer
+    display: "grid",
+    placeItems: "center",
+    padding: 16,
+    background: C.pageBg,
   },
   card: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: THEME.cardBg,
-    borderWidth: 1,
-    borderColor: THEME.cardBorder,
-    borderRadius: 16,
+    width: 340,
+    background: C.cardBg,
+    borderRadius: 14,
     padding: 20,
-
-    // let skygge
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    border: `1px solid ${C.border}`,
+    color: C.text,
+    boxShadow: "0 10px 25px rgba(0,0,0,.25)",
   },
-  title: {
-    color: THEME.titleText,
-    fontSize: 26,
-    fontWeight: "800",
-    marginBottom: 16,
-    textAlign: "center",
-  },
+  title: { margin: 0, marginBottom: 16, fontSize: 26, fontWeight: 800 },
+  form: { display: "grid", gap: 12 },
+  label: { display: "grid", gap: 6, fontSize: 13, color: "#cbd5e1" },
   input: {
-    backgroundColor: THEME.inputBg,
-    width: "100%",
-    height: 48,
+    height: 46,
     borderRadius: 10,
-    paddingHorizontal: 14,
-    marginBottom: 14,
+    border: "1px solid #e5e7eb",
+    padding: "0 12px",
+    background: C.inputBg,
+    color: C.inputText,
     fontSize: 16,
-
-    // VIGTIGT PÅ WEB: lad browseren vise focus-ring
-    outlineStyle: "auto" as any,
   },
   button: {
-    backgroundColor: THEME.btnBg,
+    height: 50,
     borderRadius: 12,
-    width: "100%",
-    height: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 6,
+    border: 0,
+    background: C.buttonBg,
+    color: C.buttonText,
+    fontWeight: 800,
+    letterSpacing: 1,
     cursor: "pointer",
   },
-  buttonText: {
-    color: THEME.btnText,
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+  error: {
+    color: "#fecaca",
+    background: "#7f1d1d",
+    border: "1px solid #ef4444",
+    borderRadius: 8,
+    padding: "8px 10px",
+    fontSize: 13,
   },
-  backLink: {
-    color: THEME.link,
-    textAlign: "center",
-    textDecorationLine: "none",
-    opacity: 0.9,
-    fontSize: 14,
-  },
-});
+};
