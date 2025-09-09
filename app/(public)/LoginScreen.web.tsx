@@ -1,16 +1,30 @@
 // app/(public)/LoginScreen.web.tsx
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { supabase } from "../../utils/supabase";
+
+/**
+ * HELT MINIMAL WEB-LOGIN
+ * - Ingen ScrollView
+ * - Ingen Link/Touchable udenfor kortet
+ * - Ingen fixed/absolute/sticky elementer
+ * - Intet KeyboardDismiss
+ * - Fokus venligt (outline synlig)
+ *
+ * Farver kan ændres her i THEME.
+ */
+const THEME = {
+  pageBg: "#7C8996",   // ← baggrund
+  cardBg: "#0b1220",
+  cardBorder: "#1f2937",
+  titleText: "#e5e7eb",
+  inputBg: "#ffffff",
+  placeholder: "#6b7280",
+  btnBg: "#ffffff",
+  btnText: "#0b1220",
+  link: "#e5e7eb",
+};
 
 export const options = { headerShown: false };
 
@@ -39,112 +53,58 @@ export default function LoginScreenWeb() {
   };
 
   return (
-    <View style={styles.page}>
-      {/* ScrollView sikrer både scroll og korrekt klik/fokus på web */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="always"
-      >
-        {/* “Tilbage” i normal flow (ingen fixed overlay der kan stjæle klik) */}
-        <View style={styles.backRow}>
-          <Link href="/" style={styles.backLink} accessibilityRole="link">
-            ‹ Tilbage
-          </Link>
-        </View>
+    <View style={styles.page} /* INGEN pointerEvents her */>
+      <View style={styles.card} /* INGEN absolute/fixed her */>
+        <Text style={styles.title}>Log ind</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.title}>Log ind</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor={THEME.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="username"
+          value={email}
+          onChangeText={setEmail}
+          autoFocus
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+        />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={THEME.mutedText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="username"
-            value={email}
-            onChangeText={setEmail}
-            autoFocus
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-          />
+        <TextInput
+          ref={passwordRef}
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor={THEME.placeholder}
+          secureTextEntry
+          textContentType="password"
+          value={password}
+          onChangeText={setPassword}
+          returnKeyType="go"
+          onSubmitEditing={onLogin}
+        />
 
-          <TextInput
-            ref={passwordRef}
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={THEME.mutedText}
-            secureTextEntry
-            textContentType="password"
-            value={password}
-            onChangeText={setPassword}
-            returnKeyType="go"
-            onSubmitEditing={onLogin}
-          />
+        <TouchableOpacity style={styles.button} onPress={onLogin} disabled={loading}>
+          <Text style={styles.buttonText}>{loading ? "Logger ind…" : "LOG IND"}</Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity style={styles.button} onPress={onLogin} disabled={loading}>
-            <Text style={styles.buttonText}>
-              {loading ? "Logger ind…" : "LOG IND"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+        <TouchableOpacity onPress={() => router.replace("/")} style={{ marginTop: 14 }}>
+          <Text style={styles.backLink}>‹ Til forsiden</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
-/* ─────────────  TEMA: skift farver her  ───────────── */
-const THEME = {
-  // Side-/baggrundsfarve
-  pageBg: "#7C8996",
-
-  // Kort (boksen omkring login)
-  cardBg: "#0b1220",
-  cardBorder: "#1f2937",
-
-  // Input
-  inputBg: "#ffffff",
-  mutedText: "#6b7280",
-
-  // Tekst
-  titleText: "#e5e7eb",
-
-  // Knappen
-  btnBg: "#ffffff",
-  btnText: "#0b1220",
-
-  // Links
-  link: "#ffffff",
-  linkMuted: "#e5e7eb",
-};
-
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: THEME.pageBg, // ← BAGGRUND
-  },
-  scroll: {
-    flex: 1,
-  },
-  container: {
-    minHeight: "100vh" as any, // gør den fuld højde og tillader pæn scroll
-    padding: 24,
+    backgroundColor: THEME.pageBg,
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
+    padding: 24,
   },
-
-  backRow: { width: "100%", maxWidth: 420 },
-  backLink: {
-    color: THEME.link,
-    opacity: 0.9,
-    textDecorationLine: "none",
-    marginBottom: 4,
-    fontSize: 16,
-  },
-
   card: {
     width: "100%",
     maxWidth: 420,
@@ -154,14 +114,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
 
-    // subtil skygge
+    // let skygge
     shadowColor: "#000",
     shadowOpacity: 0.25,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
-
   title: {
     color: THEME.titleText,
     fontSize: 26,
@@ -169,7 +128,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: "center",
   },
-
   input: {
     backgroundColor: THEME.inputBg,
     width: "100%",
@@ -179,10 +137,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     fontSize: 16,
 
-    // RN-web: tydelig fokusramme i browseren
+    // VIGTIGT PÅ WEB: lad browseren vise focus-ring
     outlineStyle: "auto" as any,
   },
-
   button: {
     backgroundColor: THEME.btnBg,
     borderRadius: 12,
@@ -198,5 +155,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 0.5,
+  },
+  backLink: {
+    color: THEME.link,
+    textAlign: "center",
+    textDecorationLine: "none",
+    opacity: 0.9,
+    fontSize: 14,
   },
 });
