@@ -2,7 +2,7 @@ import { Link, router, Slot } from "expo-router";
 import Head from "expo-router/head";
 import React, { useCallback, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-import { useSession } from "../../hooks/useSession"; // sti: (protected) -> ../..
+import { useSession } from "../../hooks/useSession"; // korrekt sti
 import { supabase } from "../../utils/supabase";
 
 export default function ProtectedWebLayout() {
@@ -20,7 +20,7 @@ export default function ProtectedWebLayout() {
     <View style={styles.page}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Globalt: tillad scroll + skjul AL footer på web */}
+        {/* Tillad scroll + fjern footere globalt */}
         <style>{`
           html, body, #root, #__next { height: auto !important; overflow: auto !important; }
           body { position: static !important; -webkit-overflow-scrolling: touch; }
@@ -28,14 +28,12 @@ export default function ProtectedWebLayout() {
         `}</style>
       </Head>
 
-      {/* Topbar */}
       <View style={styles.nav}>
         <TouchableOpacity onPress={() => router.push("/(protected)/Nabolag")}>
           <Text style={styles.brand}>Liguster</Text>
         </TouchableOpacity>
 
         <View style={styles.right}>
-          {/* Desktop-links */}
           {!isMobile && isAuthed && (
             <>
               <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
@@ -44,7 +42,6 @@ export default function ProtectedWebLayout() {
             </>
           )}
 
-          {/* Burger på mobil-web */}
           {isMobile && isAuthed && (
             <View style={{ position: "relative" }}>
               <TouchableOpacity style={styles.burger} onPress={() => setMenuOpen(v => !v)}>
@@ -63,7 +60,6 @@ export default function ProtectedWebLayout() {
             </View>
           )}
 
-          {/* Log ud på desktop */}
           {isAuthed && !isMobile && (
             <TouchableOpacity onPress={signOut} style={styles.cta}>
               <Text style={styles.ctaTxt}>Log ud</Text>
@@ -72,7 +68,6 @@ export default function ProtectedWebLayout() {
         </View>
       </View>
 
-      {/* Indhold */}
       <View style={styles.content}>
         <Slot />
       </View>
