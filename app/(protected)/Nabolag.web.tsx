@@ -23,35 +23,21 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* ─────────────────────────  TEMA & LAYOUT  ─────────────────────────
-   🔧 Skift farver/spacing her
-*/
+/* ─────────────────────────  TEMA / LAYOUT  (skift farver her) ───────────────────────── */
 const THEME = {
-  pageBg: "#7C8996",  // baggrund (som ønsket)
+  pageBg: "#7C8996",
   boardBg: "#ffffff",
-  ink:    "#0b1220",
-  sub:    "#425466",
-  line:   "#d0d7de",
-
-  chipBg:   "#eef2ff",
+  ink: "#0b1220",
+  sub: "#425466",
+  line: "#d0d7de",
+  chipBg: "#eef2ff",
   chipText: "#1e293b",
-
-  btn:      "#131921",
-
-  cardBg:   "#ffffff",
-  cardInk:  "#0f172a",
+  btn: "#131921",
+  cardBg: "#ffffff",
+  cardInk: "#0f172a",
 };
-
 const RADII = { sm: 8, md: 12, lg: 16, xl: 22 };
-
-const GRID = {
-  boardMaxW: 1120, // max bredde på “board”
-  padX: 20,        // indvendig padding i board
-  gap: 18,         // afstand mellem kort
-  brk3: 1024,      // 3 kolonner fra denne bredde
-  brk2: 680,       // 2 kolonner fra denne bredde
-};
-
+const GRID = { boardMaxW: 1120, padX: 20, gap: 18, brk3: 1024, brk2: 680 };
 const SHADOW = {
   soft: {
     shadowColor: "#000",
@@ -61,11 +47,10 @@ const SHADOW = {
     elevation: 3,
   },
 };
-
 const distances = [1, 2, 3, 5, 10, 20, 50];
 const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* ─────────────────────────  Små UI-byggestene  ───────────────────────── */
+/* ─────────────────────────  UI-bit  ───────────────────────── */
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.chip}>
@@ -75,8 +60,12 @@ function Chip({ children }: { children: React.ReactNode }) {
 }
 
 function KategoriPicker({
-  value, onChange,
-}: { value: string | null; onChange: (v: string | null) => void }) {
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -136,9 +125,15 @@ function RadiusPicker({ value, onChange }: { value: number; onChange: (v: number
 
 /* ─────────────────────────  Opret-opslag  ───────────────────────── */
 function OpretOpslagWeb({
-  visible, onClose, onSubmit, currentUserId,
+  visible,
+  onClose,
+  onSubmit,
+  currentUserId,
 }: {
-  visible: boolean; onClose: () => void; onSubmit: (payload: any) => Promise<void>; currentUserId: string | null;
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (payload: any) => Promise<void>;
+  currentUserId: string | null;
 }) {
   const [overskrift, setOverskrift] = useState("");
   const [text, setText] = useState("");
@@ -180,11 +175,9 @@ function OpretOpslagWeb({
 
       if (imageBase64) {
         const filePath = `posts/${currentUserId}/${Date.now()}.jpg`;
-        const { error } = await supabase
-          .storage
+        const { error } = await supabase.storage
           .from("foreningsbilleder")
           .upload(filePath, decode(imageBase64), { contentType: "image/jpeg", upsert: true });
-
         if (error) throw error;
         const { data } = supabase.storage.from("foreningsbilleder").getPublicUrl(filePath);
         image_url = data?.publicUrl ?? null;
@@ -215,28 +208,9 @@ function OpretOpslagWeb({
           <View style={[styles.modalCard, { width: 520 }]}>
             <Text style={styles.modalTitle}>Opret opslag</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Overskrift *"
-              placeholderTextColor="#9aa0a6"
-              value={overskrift}
-              onChangeText={setOverskrift}
-            />
-            <TextInput
-              style={[styles.input, styles.inputMulti]}
-              placeholder="Tekst *"
-              placeholderTextColor="#9aa0a6"
-              value={text}
-              onChangeText={setText}
-              multiline
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Område (valgfri)"
-              placeholderTextColor="#9aa0a6"
-              value={omraade}
-              onChangeText={setOmraade}
-            />
+            <TextInput style={styles.input} placeholder="Overskrift *" placeholderTextColor="#9aa0a6" value={overskrift} onChangeText={setOverskrift} />
+            <TextInput style={[styles.input, styles.inputMulti]} placeholder="Tekst *" placeholderTextColor="#9aa0a6" value={text} onChangeText={setText} multiline />
+            <TextInput style={styles.input} placeholder="Område (valgfri)" placeholderTextColor="#9aa0a6" value={omraade} onChangeText={setOmraade} />
 
             <View style={{ marginTop: 8, gap: 8 }}>
               <Text style={styles.label}>Kategori</Text>
@@ -246,10 +220,7 @@ function OpretOpslagWeb({
             {imagePreview ? (
               <View style={{ marginTop: 8 }}>
                 <Image source={{ uri: imagePreview }} style={styles.preview} />
-                <TouchableOpacity
-                  onPress={() => { setImagePreview(null); setImageBase64(null); }}
-                  style={[styles.smallBtn, styles.grayBtn, { marginTop: 8 }]}
-                >
+                <TouchableOpacity onPress={() => { setImagePreview(null); setImageBase64(null); }} style={[styles.smallBtn, styles.grayBtn, { marginTop: 8 }]}>
                   <Text style={styles.smallBtnText}>Fjern billede</Text>
                 </TouchableOpacity>
               </View>
@@ -260,11 +231,7 @@ function OpretOpslagWeb({
             )}
 
             <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-              <TouchableOpacity
-                style={[styles.action, styles.btn, !canSubmit && { opacity: 0.6 }]}
-                onPress={handleSubmit}
-                disabled={!canSubmit || saving}
-              >
+              <TouchableOpacity style={[styles.action, styles.btn, !canSubmit && { opacity: 0.6 }]} onPress={handleSubmit} disabled={!canSubmit || saving}>
                 <Text style={styles.actionText}>{saving ? "Opretter…" : "Opret opslag"}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.action, styles.grayBtn]} onPress={onClose}>
@@ -280,9 +247,15 @@ function OpretOpslagWeb({
 
 /* ─────────────────────────  Detalje-modal  ───────────────────────── */
 function OpslagDetaljeWeb({
-  visible, opslag, onClose, distanceText,
+  visible,
+  opslag,
+  onClose,
+  distanceText,
 }: {
-  visible: boolean; opslag: Post | null; onClose: () => void; distanceText?: string | null;
+  visible: boolean;
+  opslag: Post | null;
+  onClose: () => void;
+  distanceText?: string | null;
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -290,18 +263,13 @@ function OpslagDetaljeWeb({
         <View style={[styles.modalCard, { width: 640 }]}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <Text style={styles.modalTitle}>Opslag</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={{ fontSize: 18, fontWeight: "900" }}>✕</Text>
-            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose}><Text style={{ fontSize: 18, fontWeight: "900" }}>✕</Text></TouchableOpacity>
           </View>
 
           {opslag ? (
             <View>
               {!!opslag.image_url && (
-                <Image
-                  source={{ uri: opslag.image_url }}
-                  style={{ width: "100%", height: 280, borderRadius: RADII.md, marginBottom: 10 }}
-                />
+                <Image source={{ uri: opslag.image_url }} style={{ width: "100%", height: 280, borderRadius: RADII.md, marginBottom: 10 }} />
               )}
               {!!opslag.kategori && <Chip>{opslag.kategori}</Chip>}
               <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.cardInk }}>{opslag.overskrift}</Text>
@@ -324,8 +292,16 @@ function OpslagDetaljeWeb({
 
 /* ─────────────────────────  Skærm  ───────────────────────── */
 export default function NabolagWeb() {
-  // Synlig markør i konsollen så du kan se at DETTE build kører
-  useEffect(() => { console.log("%c[WEB-NABOLAG] filen er aktiv", "color:#16a34a;font-weight:900;"); }, []);
+  // Sikr at intet globalt blokerer scroll/pointer events (samme fix som på login)
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.style.overflow = "auto";
+      document.body.style.overflow = "auto";
+      document.body.style.pointerEvents = "auto";
+      const root = (document.getElementById("__next") || document.body) as HTMLElement;
+      root.style.pointerEvents = "auto";
+    }
+  }, []);
 
   const {
     userId,
@@ -344,7 +320,6 @@ export default function NabolagWeb() {
     distanceInKm,
   } = useNabolag();
 
-  // Dynamisk grid
   const { width } = useWindowDimensions();
   const boardW = Math.min(width, GRID.boardMaxW);
   const cols = boardW >= GRID.brk3 ? 3 : boardW >= GRID.brk2 ? 2 : 1;
@@ -372,9 +347,7 @@ export default function NabolagWeb() {
 
   const renderItem = ({ item }: { item: Post }) => {
     const showD = !!userLocation && !!item.latitude && !!item.longitude;
-    const d = showD
-      ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!)
-      : NaN;
+    const d = showD ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!) : NaN;
 
     return (
       <TouchableOpacity
@@ -388,11 +361,7 @@ export default function NabolagWeb() {
             {!!item.kategori && <Chip>{item.kategori}</Chip>}
             <Text style={styles.title}>{item.overskrift}</Text>
             {!!item.omraade && <Text style={styles.place}>{item.omraade}</Text>}
-            {!!item.text && (
-              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.teaser}>
-                {item.text}
-              </Text>
-            )}
+            {!!item.text && <Text numberOfLines={1} ellipsizeMode="tail" style={styles.teaser}>{item.text}</Text>}
             {showD ? <Text style={styles.distance}>{km(d)} væk</Text> : null}
           </View>
         </View>
@@ -402,26 +371,14 @@ export default function NabolagWeb() {
 
   return (
     <View style={styles.page}>
-      {/* BOARD */}
       <View style={[styles.board, { width: boardW }]}>
-        {/* Header */}
         <View style={styles.header}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Text style={styles.h1}>Nabolag</Text>
-
-            {/* ⛳️ MIDlertidig badge så du kan se at web-filen bruges – fjern gerne */}
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>WEB-NABOLAG</Text>
-            </View>
-            {/* ← fjern ovenstående badge når du er tilfreds */}
-          </View>
-
+          <Text style={styles.h1}>Nabolag</Text>
           <TouchableOpacity style={styles.primary} onPress={() => setCreateOpen(true)}>
             <Text style={styles.primaryText}>Opret opslag</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Filtre */}
         <View style={[styles.filters, isNarrow && { flexDirection: "column", gap: 10 }]}>
           <TextInput
             value={searchQuery}
@@ -437,7 +394,6 @@ export default function NabolagWeb() {
           </View>
         </View>
 
-        {/* Grid – lader vinduet scrolle (ingen fixed højde) */}
         {loading ? (
           <ActivityIndicator size="large" color={THEME.ink} style={{ marginTop: 20 }} />
         ) : (
@@ -447,7 +403,7 @@ export default function NabolagWeb() {
             style={{ width: "100%" }}
             contentContainerStyle={{
               paddingHorizontal: GRID.padX,
-              paddingBottom: 40, // ekstra luft nederst så siden kan scrolle
+              paddingBottom: 48, // lidt ekstra luft nederst
               alignItems: "center",
               width: boardW,
               alignSelf: "center",
@@ -456,18 +412,17 @@ export default function NabolagWeb() {
             columnWrapperStyle={isGrid ? { gap: GRID.gap } : undefined}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
+            // 🔧 VIGTIGT: Lad vinduet scrolle – ikke FlatList
+            scrollEnabled={false}
             removeClippedSubviews={false}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={<Text style={{ color: THEME.sub, marginTop: 14 }}>Ingen opslag fundet.</Text>}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.ink]} />
-            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.ink]} />}
             ListFooterComponent={<View style={{ height: 8 }} />}
           />
         )}
       </View>
 
-      {/* Modaler */}
       <OpretOpslagWeb
         visible={createOpen}
         onClose={() => setCreateOpen(false)}
@@ -493,13 +448,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 18,
   },
-
-  board: {
-    backgroundColor: THEME.boardBg,
-    borderRadius: RADII.xl,
-    ...SHADOW.soft,
-  },
-
+  board: { backgroundColor: THEME.boardBg, borderRadius: RADII.xl, ...SHADOW.soft },
   header: {
     height: 68,
     paddingHorizontal: GRID.padX,
@@ -508,17 +457,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   h1: { color: THEME.ink, fontSize: 22, fontWeight: "900" },
-
-  // midlertidig badge – OK at slette
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "#e5ecff",
-    borderWidth: 1,
-    borderColor: "#c7d2fe",
-  },
-  badgeText: { color: "#1e3a8a", fontWeight: "900", fontSize: 11, letterSpacing: 0.3 },
 
   primary: {
     backgroundColor: THEME.btn,
@@ -587,7 +525,6 @@ const styles = StyleSheet.create({
   teaser: { fontSize: 13, color: "#475569", marginTop: 6 },
   distance: { fontSize: 11, color: "#6b7280", marginTop: 6 },
 
-  // Modaler / inputs
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -629,23 +566,12 @@ const styles = StyleSheet.create({
   inputMulti: { minHeight: 90, textAlignVertical: "top" },
   label: { color: "#111827", fontWeight: "700" },
 
-  smallBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: RADII.md,
-    alignSelf: "flex-start",
-  },
+  smallBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADII.md, alignSelf: "flex-start" },
   smallBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
   btn: { backgroundColor: THEME.btn },
   grayBtn: { backgroundColor: "#9aa0a6" },
   preview: { width: "100%", height: 180, backgroundColor: "#f1f5f9", borderRadius: RADII.md },
 
-  action: {
-    borderRadius: RADII.md,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  action: { borderRadius: RADII.md, paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   actionText: { color: "#fff", fontSize: 14, fontWeight: "900" },
 });
