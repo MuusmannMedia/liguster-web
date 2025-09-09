@@ -23,57 +23,42 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* ╔════════════════════════════════ THEME (ALT KAN TILPASSES HER) ═══════════════════════════════╗
-   ║ Skift farver, radii, skygger og breakpoints.                                                  ║
-   ╚═══════════════════════════════════════════════════════════════════════════════════════════════╝ */
+/* ─────────────────────────  TEMA / LAYOUT  ───────────────────────── */
+/*  SKIFT FARVER HER  */
 const THEME = {
-  // ── Farver ────────────────────────────────────────────────────────────────────────────────
-  pageBg: "#7C8996",           // ← EDIT HERE  (global baggrund)
-  boardBg: "#ffffff",          // ← EDIT HERE  (den hvide “tavle”)
-  ink: "#0b1220",              // ← EDIT HERE  (primær tekst)
-  sub: "#425466",              // ← EDIT HERE  (sekundær tekst)
-  line: "#d0d7de",             // ← EDIT HERE  (grænselinje)
-  chipBg: "#eef2ff",           // ← EDIT HERE  (badge-knapper)
-  chipText: "#1e293b",         // ← EDIT HERE
-  btn: "#131921",              // ← EDIT HERE  (primær CTA)
-
-  cardBg: "#ffffff",           // ← EDIT HERE  (kort)
-  cardInk: "#0f172a",          // ← EDIT HERE  (kort-overskrift)
-  imageBg: "#f1f5f9",          // ← EDIT HERE  (fallback for billeder)
-
-  // ── Radii ────────────────────────────────────────────────────────────────────────────────
-  radius: { sm: 8, md: 12, lg: 16, xl: 22 }, // ← EDIT HERE
-
-  // ── Skygge (blød) ────────────────────────────────────────────────────────────────────────
-  shadowSoft: {
-    shadowColor: "#000",
-    shadowOpacity: 0.08,      // ← EDIT HERE
-    shadowRadius: 14,         // ← EDIT HERE
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-
-  // ── Layout / breakpoints ─────────────────────────────────────────────────────────────────
-  boardMaxW: 1120, // ← EDIT HERE  (max bredde for “tavle”)
-  padX: 20,        // ← EDIT HERE  (vandret padding i board)
-  gap: 18,         // ← EDIT HERE  (afstand mellem kort)
-  brk3: 1024,      // ← EDIT HERE  (>= 3 kolonner)
-  brk2: 680,       // ← EDIT HERE  (>= 2 kolonner)
-} as const;
-
+  pageBg: "#7C8996", // ← Global baggrund
+  boardBg: "#0b1220",
+  paneBg: "#0f1623",
+  ink: "#0b1220",
+  text: "#e5e7eb",
+  sub: "#94a3b8",
+  white: "#ffffff",
+  outline: "#dbe2ea",
+  outlineDark: "#1f2937",
+  badgeBg: "#25489022",
+  // knapper
+  btnBg: "#131921",
+  btnText: "#ffffff",
+};
+/*  BREDDER / GAPS  */
+const LAYOUT = {
+  MAX_BOARD_W: 1040, // “kort-tavlens” max bredde
+  PAD_X: 20,
+  GAP: 16,
+  RADIUS: 14,
+  INPUT_H: 46,
+};
+/*  Afstande til filter-dialoger  */
 const distances = [1, 2, 3, 5, 10, 20, 50];
-const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* Små UI-hjælpere */
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={styles.chip}>
-      <Text style={styles.chipText}>{children}</Text>
-    </View>
-  );
+/* ───────────────────────── Hjælpere ───────────────────────── */
+function fmtKm(n: number) {
+  if (Number.isNaN(n)) return "";
+  return `${n.toFixed(1)} km`;
 }
 
-function KategoriPicker({
+/* ───────────────────────── Filter-dialoger ───────────────────────── */
+function KategoriSelector({
   value,
   onChange,
 }: {
@@ -83,47 +68,40 @@ function KategoriPicker({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <TouchableOpacity style={styles.chipBtn} onPress={() => setOpen(true)} activeOpacity={0.9}>
-        <Text style={styles.chipBtnText}>{value ?? "Alle kategorier"}</Text>
-        <Text style={styles.caret}>▾</Text>
+      <TouchableOpacity style={styles.iconBtn} onPress={() => setOpen(true)} activeOpacity={0.9}>
+        <Text style={styles.iconBtnText}>▾</Text>
       </TouchableOpacity>
 
-      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { width: 360 }]}>
-            <Text style={styles.modalTitle}>Vælg kategori</Text>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={dialogStyles.overlay}>
+          <View style={dialogStyles.dialog}>
+            <Text style={dialogStyles.title}>Vælg kategori</Text>
 
             <TouchableOpacity
-              style={[
-                styles.modalOption,
-                { backgroundColor: value === null ? "#e6eeff" : "#f6f8fa", borderWidth: value === null ? 2 : 0, borderColor: "#3b82f6" },
-              ]}
+              style={[dialogStyles.option, value === null && dialogStyles.selectedOption]}
               onPress={() => {
                 onChange(null);
                 setOpen(false);
               }}
             >
-              <Text style={{ fontWeight: value === null ? "900" : "600", color: THEME.ink }}>Alle</Text>
+              <Text style={dialogStyles.optionText}>Alle</Text>
             </TouchableOpacity>
 
             {KATEGORIER.map((k) => (
               <TouchableOpacity
                 key={k}
-                style={[
-                  styles.modalOption,
-                  { backgroundColor: value === k ? "#e6eeff" : "#f6f8fa", borderWidth: value === k ? 2 : 0, borderColor: "#3b82f6" },
-                ]}
+                style={[dialogStyles.option, value === k && dialogStyles.selectedOption]}
                 onPress={() => {
                   onChange(k);
                   setOpen(false);
                 }}
               >
-                <Text style={{ fontWeight: value === k ? "900" : "600", color: THEME.ink }}>{k}</Text>
+                <Text style={dialogStyles.optionText}>{k}</Text>
               </TouchableOpacity>
             ))}
 
-            <TouchableOpacity onPress={() => setOpen(false)} style={styles.modalClose}>
-              <Text style={styles.modalCloseText}>Luk</Text>
+            <TouchableOpacity style={dialogStyles.closeBtn} onPress={() => setOpen(false)}>
+              <Text style={dialogStyles.closeBtnText}>Luk</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -132,7 +110,7 @@ function KategoriPicker({
   );
 }
 
-function RadiusPicker({
+function RadiusSelector({
   value,
   onChange,
 }: {
@@ -142,34 +120,30 @@ function RadiusPicker({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <TouchableOpacity style={styles.chipBtn} onPress={() => setOpen(true)} activeOpacity={0.9}>
-        <Text style={styles.chipBtnText}>{value} km</Text>
-        <Text style={styles.caret}>▾</Text>
+      <TouchableOpacity style={styles.radiusBtn} onPress={() => setOpen(true)}>
+        <Text style={styles.radiusBtnText}>{value} km</Text>
       </TouchableOpacity>
 
-      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { width: 360 }]}>
-            <Text style={styles.modalTitle}>Vis opslag indenfor</Text>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <View style={dialogStyles.overlay}>
+          <View style={dialogStyles.dialog}>
+            <Text style={dialogStyles.title}>Vis opslag indenfor</Text>
 
             {distances.map((d) => (
               <TouchableOpacity
                 key={d}
-                style={[
-                  styles.modalOption,
-                  { backgroundColor: value === d ? "#e6eeff" : "#f6f8fa", borderWidth: value === d ? 2 : 0, borderColor: "#3b82f6" },
-                ]}
+                style={[dialogStyles.option, value === d && dialogStyles.selectedOption]}
                 onPress={() => {
                   onChange(d);
                   setOpen(false);
                 }}
               >
-                <Text style={{ fontWeight: value === d ? "900" : "600", color: THEME.ink }}>{d} km</Text>
+                <Text style={dialogStyles.optionText}>{d} km</Text>
               </TouchableOpacity>
             ))}
 
-            <TouchableOpacity onPress={() => setOpen(false)} style={styles.modalClose}>
-              <Text style={styles.modalCloseText}>Luk</Text>
+            <TouchableOpacity style={dialogStyles.closeBtn} onPress={() => setOpen(false)}>
+              <Text style={dialogStyles.closeBtnText}>Luk</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -178,7 +152,7 @@ function RadiusPicker({
   );
 }
 
-/* ─────────────────────────  Opret opslag (web)  ───────────────────────── */
+/* ───────────────────── Opret opslag (web) ───────────────────── */
 function OpretOpslagWeb({
   visible,
   onClose,
@@ -204,7 +178,6 @@ function OpretOpslagWeb({
   const pickImage = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: false,
       quality: 1,
       base64: false,
     });
@@ -225,7 +198,6 @@ function OpretOpslagWeb({
 
   const handleSubmit = async () => {
     if (!currentUserId || !canSubmit) return;
-
     try {
       setSaving(true);
 
@@ -252,8 +224,12 @@ function OpretOpslagWeb({
         image_url,
       });
 
-      setOverskrift(""); setText(""); setOmraade(""); setKategori(null);
-      setImagePreview(null); setImageBase64(null);
+      setOverskrift("");
+      setText("");
+      setOmraade("");
+      setKategori(null);
+      setImagePreview(null);
+      setImageBase64(null);
       onClose();
     } catch (e: any) {
       alert(e?.message || "Kunne ikke oprette opslag.");
@@ -265,75 +241,78 @@ function OpretOpslagWeb({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { width: 520, alignItems: "stretch" }]}>
-            <Text style={styles.modalTitle}>Opret opslag</Text>
+        <View style={dialogStyles.overlay}>
+          <View style={[dialogStyles.dialog, { width: 520, alignItems: "stretch" }]}>
+            <Text style={[dialogStyles.title, { alignSelf: "center" }]}>Opret opslag</Text>
 
-            <Text style={styles.label}>Overskrift *</Text>
             <TextInput
               style={styles.input}
-              placeholder="Hvad handler det om?"
+              placeholder="Overskrift *"
               placeholderTextColor="#9aa0a6"
               value={overskrift}
               onChangeText={setOverskrift}
             />
-
-            <Text style={[styles.label, { marginTop: 8 }]}>Tekst *</Text>
             <TextInput
-              style={[styles.input, styles.inputMulti]}
-              placeholder="Fortæl lidt mere…"
+              style={[styles.input, styles.inputMultiline]}
+              placeholder="Tekst *"
               placeholderTextColor="#9aa0a6"
               value={text}
               onChangeText={setText}
               multiline
             />
-
-            <Text style={[styles.label, { marginTop: 8 }]}>Område</Text>
             <TextInput
               style={styles.input}
-              placeholder="fx vej/bydel"
+              placeholder="Område (fx vej/bydel)"
               placeholderTextColor="#9aa0a6"
               value={omraade}
               onChangeText={setOmraade}
             />
 
-            <Text style={[styles.label, { marginTop: 8 }]}>Kategori</Text>
-            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-              <TextInput
-                editable={false}
-                style={[styles.input, { flex: 1, marginTop: 0 }]}
-                placeholder="(valgfri)"
-                placeholderTextColor="#9aa0a6"
-                value={kategori || ""}
-              />
-              <KategoriPicker value={kategori} onChange={setKategori} />
+            <View style={{ marginTop: 8 }}>
+              <Text style={styles.label}>Kategori</Text>
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                <TextInput
+                  editable={false}
+                  style={[styles.input, { flex: 1, marginTop: 0 }]}
+                  placeholder="(valgfri)"
+                  placeholderTextColor="#9aa0a6"
+                  value={kategori || ""}
+                />
+                <KategoriSelector value={kategori} onChange={setKategori} />
+              </View>
             </View>
 
             {imagePreview ? (
-              <View style={{ marginTop: 10 }}>
+              <View style={{ marginTop: 8 }}>
                 <Image source={{ uri: imagePreview }} style={styles.preview} />
                 <TouchableOpacity
-                  onPress={() => { setImagePreview(null); setImageBase64(null); }}
+                  onPress={() => {
+                    setImagePreview(null);
+                    setImageBase64(null);
+                  }}
                   style={[styles.smallBtn, styles.grayBtn, { alignSelf: "flex-start", marginTop: 8 }]}
                 >
                   <Text style={styles.smallBtnText}>Fjern billede</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity onPress={pickImage} style={[styles.smallBtn, styles.btn, { alignSelf: "flex-start", marginTop: 10 }]}>
+              <TouchableOpacity
+                onPress={pickImage}
+                style={[styles.smallBtn, styles.blackBtn, { alignSelf: "flex-start", marginTop: 6 }]}
+              >
                 <Text style={styles.smallBtnText}>Vælg billede</Text>
               </TouchableOpacity>
             )}
 
             <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
               <TouchableOpacity
-                style={[styles.action, styles.btn, !canSubmit && { opacity: 0.6 }]}
+                style={[styles.actionBtn, styles.blackBtn, !canSubmit && { opacity: 0.6 }]}
                 onPress={handleSubmit}
                 disabled={!canSubmit}
               >
                 <Text style={styles.actionText}>{saving ? "Opretter…" : "Opret opslag"}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.action, styles.grayBtn]} onPress={onClose}>
+              <TouchableOpacity style={[styles.actionBtn, styles.grayBtn]} onPress={onClose}>
                 <Text style={styles.actionText}>Annullér</Text>
               </TouchableOpacity>
             </View>
@@ -344,7 +323,7 @@ function OpretOpslagWeb({
   );
 }
 
-/* ─────────────────────────  Detalje-modal  ───────────────────────── */
+/* ───────────────────── Detalje modal (web) ───────────────────── */
 function OpslagDetaljeWeb({
   visible,
   opslag,
@@ -357,23 +336,27 @@ function OpslagDetaljeWeb({
   distanceText?: string | null;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { width: 640, alignItems: "stretch" }]}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={dialogStyles.overlay}>
+        <View style={[dialogStyles.dialog, { width: 640, alignItems: "stretch" }]}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <Text style={styles.modalTitle}>Opslag</Text>
+            <Text style={[dialogStyles.title, { marginBottom: 0 }]}>Opslag</Text>
             <TouchableOpacity onPress={onClose}>
-              <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.ink }}>✕</Text>
+              <Text style={{ fontWeight: "900", fontSize: 18 }}>✕</Text>
             </TouchableOpacity>
           </View>
 
           {opslag ? (
             <View>
               {!!opslag.image_url && (
-                <Image source={{ uri: opslag.image_url }} style={{ width: "100%", height: 280, borderRadius: THEME.radius.md, marginBottom: 10, backgroundColor: THEME.imageBg }} />
+                <Image source={{ uri: opslag.image_url }} style={{ width: "100%", height: 280, borderRadius: 12, marginBottom: 10 }} />
               )}
-              {!!opslag.kategori && <Chip>{opslag.kategori}</Chip>}
-              <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.cardInk }}>{opslag.overskrift}</Text>
+              {!!opslag.kategori && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{opslag.kategori}</Text>
+                </View>
+              )}
+              <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.ink }}>{opslag.overskrift}</Text>
               {!!opslag.omraade && <Text style={{ color: "#374151", marginTop: 2 }}>{opslag.omraade}</Text>}
               {!!distanceText && <Text style={{ color: "#6b7280", marginTop: 2 }}>{distanceText}</Text>}
               {!!opslag.text && <Text style={{ color: "#111827", marginTop: 10, lineHeight: 20 }}>{opslag.text}</Text>}
@@ -382,7 +365,7 @@ function OpslagDetaljeWeb({
             <Text style={{ color: "#6b7280" }}>Indlæser…</Text>
           )}
 
-          <TouchableOpacity onPress={onClose} style={[styles.action, styles.btn, { marginTop: 16, alignSelf: "flex-start" }]}>
+          <TouchableOpacity onPress={onClose} style={[styles.actionBtn, styles.blackBtn, { marginTop: 16 }]}>
             <Text style={styles.actionText}>Luk</Text>
           </TouchableOpacity>
         </View>
@@ -391,7 +374,7 @@ function OpslagDetaljeWeb({
   );
 }
 
-/* ─────────────────────────  Skærm  ───────────────────────── */
+/* ───────────────────────────── Skærm ───────────────────────────── */
 export default function NabolagWeb() {
   const {
     userId,
@@ -410,76 +393,61 @@ export default function NabolagWeb() {
     distanceInKm,
   } = useNabolag();
 
+  const [opretVisible, setOpretVisible] = useState(false);
+  const [detaljeVisible, setDetaljeVisible] = useState(false);
+  const [valgtOpslag, setValgtOpslag] = useState<Post | null>(null);
+
   const { width } = useWindowDimensions();
 
-  // Board-beregninger (centreret grid)
-  const boardW = Math.min(width, THEME.boardMaxW);
-  const cols = boardW >= THEME.brk3 ? 3 : boardW >= THEME.brk2 ? 2 : 1;
+  // “Tavle”-bredde + responsive kolonner (1 / 2 / 3)
+  const boardW = Math.min(width, LAYOUT.MAX_BOARD_W);
+  const cols = width >= 980 ? 3 : width >= 680 ? 2 : 1;
   const isGrid = cols > 1;
-  const rawW =
-    (boardW - THEME.padX * 2 - (isGrid ? THEME.gap * (cols - 1) : 0)) /
-    (isGrid ? cols : 1);
-  const cardW = Math.floor(rawW);
-  const singleW = Math.floor(boardW - THEME.padX * 2);
-  const isNarrow = boardW < 560;
-
-  const [createOpen, setCreateOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<Post | null>(null);
+  const cardW = isGrid
+    ? (boardW - LAYOUT.PAD_X * 2 - LAYOUT.GAP * (cols - 1)) / cols
+    : Math.min(560, boardW - LAYOUT.PAD_X * 2);
 
   const distanceText = useMemo(() => {
-    if (!selected || !userLocation || !selected.latitude || !selected.longitude) return null;
-    return km(
-      distanceInKm(
-        userLocation.latitude,
-        userLocation.longitude,
-        selected.latitude,
-        selected.longitude
-      )
+    if (!valgtOpslag || !userLocation || !valgtOpslag.latitude || !valgtOpslag.longitude) return null;
+    const d = distanceInKm(
+      userLocation.latitude,
+      userLocation.longitude,
+      valgtOpslag.latitude,
+      valgtOpslag.longitude
     );
-  }, [selected, userLocation]);
+    return fmtKm(d);
+  }, [valgtOpslag, userLocation]);
 
   const renderItem = ({ item }: { item: Post }) => {
-    const showD = !!userLocation && !!item.latitude && !!item.longitude;
-    const d = showD
-      ? distanceInKm(
-          userLocation!.latitude,
-          userLocation!.longitude,
-          item.latitude!,
-          item.longitude!
-        )
+    const showDistance = !!userLocation && !!item.latitude && !!item.longitude;
+    const d = showDistance
+      ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!)
       : NaN;
 
     return (
       <TouchableOpacity
         onPress={() => {
-          setSelected(item);
-          setDetailOpen(true);
+          setValgtOpslag(item);
+          setDetaljeVisible(true);
         }}
+        style={{ width: cardW, marginBottom: LAYOUT.GAP }}
         activeOpacity={0.92}
-        style={{
-          width: isGrid ? cardW : singleW,
-          marginBottom: THEME.gap,
-        }}
       >
         <View style={styles.card}>
-          {!!item.image_url && (
-            <Image
-              source={{ uri: item.image_url }}
-              style={styles.cardImage}
-            />
+          {!!item.image_url && <Image source={{ uri: item.image_url }} style={styles.cardImage} />}
+          {!!item.kategori && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.kategori}</Text>
+            </View>
           )}
-          <View style={{ padding: 10 }}>
-            {!!item.kategori && <Chip>{item.kategori}</Chip>}
-            <Text style={styles.title}>{item.overskrift}</Text>
-            {!!item.omraade && <Text style={styles.place}>{item.omraade}</Text>}
-            {!!item.text && (
-              <Text style={styles.teaser} numberOfLines={1} ellipsizeMode="tail">
-                {item.text}
-              </Text>
-            )}
-            {showD ? <Text style={styles.distance}>{km(d)} væk</Text> : null}
-          </View>
+          <Text style={styles.cardTitle}>{item.overskrift}</Text>
+          {!!item.omraade && <Text style={styles.cardPlace}>{item.omraade}</Text>}
+          {!!item.text && (
+            <Text style={styles.cardTeaser} numberOfLines={1} ellipsizeMode="tail">
+              {item.text}
+            </Text>
+          )}
+          {showDistance ? <Text style={styles.distance}>{fmtKm(d)} væk</Text> : null}
         </View>
       </TouchableOpacity>
     );
@@ -487,33 +455,29 @@ export default function NabolagWeb() {
 
   return (
     <View style={styles.page}>
-      {/* Board (den hvide "tavle") */}
+      {/* “Tavlen” der holder alt indhold centreret og giver scroll */}
       <View style={[styles.board, { width: boardW }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.h1}>Nabolag</Text>
-          <TouchableOpacity style={styles.primary} onPress={() => setCreateOpen(true)}>
-            <Text style={styles.primaryText}>Opret opslag</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Filtre */}
-        <View style={[styles.filters, isNarrow && { flexDirection: "column", gap: 10 }]}>
+        {/* Toplinje: søg + filtre + CTA */}
+        <View style={styles.topRow}>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={[styles.search, isNarrow && { width: "100%" }]}
+            style={styles.searchInput}
             placeholder="Søg i opslag…"
-            placeholderTextColor="#6b7280"
+            placeholderTextColor={THEME.sub}
             returnKeyType="search"
           />
-          <View style={[styles.filterRight, isNarrow && { width: "100%", justifyContent: "space-between" }]}>
-            <KategoriPicker value={kategoriFilter} onChange={setKategoriFilter} />
-            <RadiusPicker value={radius} onChange={handleRadiusChange} />
+
+          <View style={styles.topRight}>
+            <KategoriSelector value={kategoriFilter} onChange={setKategoriFilter} />
+            <RadiusSelector value={radius} onChange={handleRadiusChange} />
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => setOpretVisible(true)} activeOpacity={0.92}>
+              <Text style={styles.primaryBtnText}>Opret opslag</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Grid — VIGTIGT: scrollEnabled={false} så siden (layoutets ScrollView) kan scrolle */}
+        {/* Kortliste – scroll sker her */}
         {loading ? (
           <ActivityIndicator size="large" color={THEME.ink} style={{ marginTop: 20 }} />
         ) : (
@@ -522,146 +486,163 @@ export default function NabolagWeb() {
             keyExtractor={(it) => it.id}
             style={{ width: "100%" }}
             contentContainerStyle={{
-              paddingHorizontal: THEME.padX,
+              paddingHorizontal: LAYOUT.PAD_X,
               paddingBottom: 28,
               alignItems: "center",
               width: boardW,
               alignSelf: "center",
             }}
             numColumns={isGrid ? cols : 1}
-            columnWrapperStyle={isGrid ? { gap: THEME.gap } : undefined}
+            columnWrapperStyle={isGrid ? { gap: LAYOUT.GAP } : undefined}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={<Text style={{ color: THEME.sub, marginTop: 14 }}>Ingen opslag fundet.</Text>}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.ink]} />}
-            scrollEnabled={false}   // ← FIX: deaktiver FlatList-scroll pga. ScrollView i _layout.web.tsx
           />
         )}
       </View>
 
       {/* Modaler */}
       <OpretOpslagWeb
-        visible={createOpen}
-        onClose={() => setCreateOpen(false)}
+        visible={opretVisible}
+        onClose={() => setOpretVisible(false)}
         onSubmit={async (payload) => {
           await createPost(payload);
         }}
         currentUserId={userId}
       />
-
       <OpslagDetaljeWeb
-        visible={detailOpen}
-        opslag={selected}
-        onClose={() => setDetailOpen(false)}
+        visible={detaljeVisible}
+        opslag={valgtOpslag}
+        onClose={() => setDetaljeVisible(false)}
         distanceText={distanceText}
       />
     </View>
   );
 }
 
-/* ╔══════════════════════════════════════  STYLES  ═════════════════════════════════════════════╗ */
+/* ───────────────────────── Styles ───────────────────────── */
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: THEME.pageBg,        // ← EDIT HERE
+    backgroundColor: THEME.pageBg, // ← baggrund
     alignItems: "center",
   },
 
   board: {
     backgroundColor: THEME.boardBg,
-    borderRadius: THEME.radius.xl,
-    ...THEME.shadowSoft,
-    marginTop: 16,                         // luft under navbar
+    borderRadius: 18,
+    marginTop: 18,
     marginBottom: 18,
+    overflow: "hidden",
+    // subtil skygge
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
 
-  header: {
-    height: 68,
-    paddingHorizontal: THEME.padX,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  h1: { color: THEME.ink, fontSize: 22, fontWeight: "900" },
-
-  primary: {
-    backgroundColor: THEME.btn,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: THEME.radius.md,
-    borderWidth: 2,
-    borderColor: "#e5e7eb",
-  },
-  primaryText: { color: "#fff", fontWeight: "800" },
-
-  filters: {
-    paddingHorizontal: THEME.padX,
-    paddingBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
+  topRow: {
+    width: "100%",
+    paddingHorizontal: LAYOUT.PAD_X,
+    paddingTop: 18,
+    paddingBottom: 10,
     gap: 10,
   },
-  search: {
-    flex: 1,
-    height: 44,
-    backgroundColor: "#fff",
-    borderRadius: THEME.radius.md,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: THEME.line,
-    color: THEME.ink,
-  },
-  filterRight: { flexDirection: "row", alignItems: "center", gap: 10 },
 
-  chipBtn: {
-    height: 44,
-    borderRadius: THEME.radius.md,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: THEME.line,
-    backgroundColor: THEME.chipBg,
+  topRight: {
+    width: "100%",
+    marginTop: 10,
     flexDirection: "row",
+    gap: 10,
     alignItems: "center",
-    gap: 8,
+    justifyContent: "flex-end",
   },
-  chipBtnText: { color: THEME.chipText, fontWeight: "800" },
-  caret: { color: THEME.chipText, fontSize: 12, marginTop: 1 },
 
-  chip: {
-    alignSelf: "flex-start",
-    backgroundColor: THEME.chipBg,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 6,
+  searchInput: {
+    width: "100%",
+    height: LAYOUT.INPUT_H,
+    backgroundColor: THEME.paneBg,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    color: THEME.text,
+    borderWidth: 1.5,
+    borderColor: THEME.outlineDark,
   },
-  chipText: { color: THEME.chipText, fontWeight: "800", fontSize: 12 },
 
+  /* Knapper */
+  primaryBtn: {
+    height: LAYOUT.INPUT_H,
+    paddingHorizontal: 16,
+    backgroundColor: THEME.btnBg,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: THEME.white,
+  },
+  primaryBtnText: { color: THEME.btnText, fontWeight: "900", letterSpacing: 0.4 },
+
+  iconBtn: {
+    height: LAYOUT.INPUT_H,
+    width: LAYOUT.INPUT_H,
+    borderRadius: 12,
+    backgroundColor: THEME.btnBg,
+    borderWidth: 2,
+    borderColor: THEME.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconBtnText: { color: THEME.white, fontSize: 18, marginTop: -2, fontWeight: "900" },
+
+  radiusBtn: {
+    height: LAYOUT.INPUT_H,
+    minWidth: 68,
+    borderRadius: 12,
+    backgroundColor: THEME.btnBg,
+    borderWidth: 2,
+    borderColor: THEME.white,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  radiusBtnText: { color: THEME.white, fontWeight: "900" },
+
+  /* Kort */
   card: {
     width: "100%",
-    backgroundColor: THEME.cardBg,
-    borderRadius: THEME.radius.lg,
+    backgroundColor: THEME.white,
+    borderRadius: LAYOUT.RADIUS,
+    padding: 12,
     borderWidth: 1,
-    borderColor: THEME.line,
-    overflow: "hidden",
+    borderColor: THEME.outline,
   },
-  cardImage: { width: "100%", height: 132, backgroundColor: THEME.imageBg },
-  title: { fontWeight: "900", fontSize: 16, color: THEME.cardInk },
-  place: { fontSize: 12, color: "#64748b", marginTop: 2 },
-  teaser: { fontSize: 13, color: "#475569", marginTop: 6 },
-  distance: { fontSize: 11, color: "#6b7280", marginTop: 6 },
+  cardImage: {
+    width: "100%",
+    height: 140,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: "#eef2f7",
+  },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: THEME.badgeBg,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 7,
+  },
+  badgeText: { color: THEME.ink, fontWeight: "bold", fontSize: 12.5 },
+  cardTitle: { fontWeight: "900", fontSize: 16, marginBottom: 2, color: THEME.ink },
+  cardPlace: { fontSize: 12, color: "#64748b", marginBottom: 2 },
+  cardTeaser: { fontSize: 13, color: "#475569", marginTop: 3 },
+  distance: { fontSize: 11, color: "#6b7280", marginTop: 4 },
 
-  // Modal & inputs
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 18 },
-  modalCard: { backgroundColor: "#fff", borderRadius: THEME.radius.xl, borderWidth: 1, borderColor: "#eef1f4", padding: 18 },
-  modalTitle: { fontSize: 18, fontWeight: "900", color: "#111827", marginBottom: 12 },
-  modalOption: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: THEME.radius.md, backgroundColor: "#f6f8fa", marginBottom: 8, alignItems: "center" },
-  modalClose: { alignSelf: "center", marginTop: 6, padding: 8 },
-  modalCloseText: { color: "#374151", fontWeight: "700" },
-
+  /* Inputs i dialog */
   input: {
     backgroundColor: "#fff",
-    borderRadius: THEME.radius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#e5e8ec",
     paddingHorizontal: 10,
@@ -670,15 +651,59 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 14,
   },
-  inputMulti: { minHeight: 90, textAlignVertical: "top" },
-  label: { color: "#111827", fontWeight: "700" },
+  inputMultiline: { minHeight: 90, textAlignVertical: "top" },
+  label: { color: "#111827", fontWeight: "700", marginBottom: 6 },
 
-  smallBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: THEME.radius.md, alignSelf: "flex-start" },
+  smallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
   smallBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
-  btn: { backgroundColor: THEME.btn },
+  blackBtn: { backgroundColor: THEME.btnBg },
   grayBtn: { backgroundColor: "#9aa0a6" },
-  preview: { width: "100%", height: 180, backgroundColor: THEME.imageBg, borderRadius: THEME.radius.md },
+  preview: { width: "100%", height: 180, backgroundColor: "#f1f5f9", borderRadius: 10 },
 
-  action: { borderRadius: THEME.radius.md, paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
+  actionBtn: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   actionText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+});
+
+const dialogStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,22,35,0.70)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18,
+  },
+  dialog: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 18,
+    width: 420,
+    borderWidth: 1,
+    borderColor: "#eef1f4",
+  },
+  title: { fontSize: 18, fontWeight: "900", color: "#111827", marginBottom: 12 },
+  option: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    marginBottom: 7,
+    backgroundColor: "#f4f7fa",
+    width: 240,
+    alignItems: "center",
+    alignSelf: "center",
+  },
+  optionText: { color: "#111827", fontWeight: "600" },
+  selectedOption: { backgroundColor: "#e5ecff", borderColor: "#3b82f6", borderWidth: 2 },
+  closeBtn: { marginTop: 10, padding: 8, alignSelf: "center" },
+  closeBtnText: { color: "#111827", fontWeight: "bold" },
 });
