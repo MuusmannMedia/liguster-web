@@ -2,17 +2,13 @@
 import { Link, router, Slot } from "expo-router";
 import Head from "expo-router/head";
 import React, { useCallback, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSession } from "../../hooks/useSession";
 import { supabase } from "../../utils/supabase";
 
 export default function ProtectedWebLayout() {
   const { session } = useSession();
   const isAuthed = !!session;
-
-  const { width } = useWindowDimensions();
-  const isMobile = width > 0 && width < 720; // robust på web
-
   const [menuOpen, setMenuOpen] = useState(false);
 
   const signOut = useCallback(async () => {
@@ -23,11 +19,19 @@ export default function ProtectedWebLayout() {
     <View style={styles.page}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Tillad scroll & fjern absolut AL footer på web */}
+        {/* Globalt: tillad scroll & fjern alt footer-indhold */}
         <style>{`
           html, body, #root, #__next { height: auto !important; overflow: auto !important; }
           body { position: static !important; -webkit-overflow-scrolling: touch; }
           footer, .footer, #footer, .bottom-nav, #bottom-nav, [data-footer] { display:none !important; }
+
+          /* Vis/skjul nav-variationer rent med CSS */
+          .desktopOnly { display: none; }
+          .mobileOnly { display: flex; }
+          @media (min-width: 720px) {
+            .desktopOnly { display: flex; }
+            .mobileOnly { display: none; }
+          }
         `}</style>
       </Head>
 
@@ -37,25 +41,25 @@ export default function ProtectedWebLayout() {
           <Text style={styles.brand}>Liguster</Text>
         </TouchableOpacity>
 
-        <View style={styles.right}>
-          {/* Desktop links */}
-          {isAuthed && !isMobile && (
-            <>
+        <View style={[styles.right, { gap: 16 }]}>
+          {/* DESKTOP menu (vises kun via CSS) */}
+          {isAuthed && (
+            <View className="desktopOnly" style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
               <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
               <Link href="/(protected)/ForeningerScreen" style={styles.link}>Forening</Link>
               <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
               <TouchableOpacity onPress={signOut} style={styles.cta}>
                 <Text style={styles.ctaTxt}>Log ud</Text>
               </TouchableOpacity>
-            </>
+            </View>
           )}
 
-          {/* Mobil burger */}
-          {isAuthed && isMobile && (
-            <View style={{ position: "relative" }}>
+          {/* MOBIL burger (vises kun via CSS) */}
+          {isAuthed && (
+            <View className="mobileOnly" style={{ position: "relative", alignItems: "center" }}>
               <TouchableOpacity
                 style={styles.burger}
-                onPress={() => setMenuOpen((v) => !v)}
+                onPress={() => setMenuOpen(v => !v)}
                 accessibilityRole="button"
                 accessibilityLabel="Åbn menu"
               >
@@ -64,31 +68,12 @@ export default function ProtectedWebLayout() {
 
               {menuOpen && (
                 <>
-                  {/* overlay for at kunne klikke udenfor og lukke */}
-                  <TouchableOpacity style={styles.overlay} onPress={() => setMenuOpen(false)} />
-                  <View style={styles.menu}>
-                    <Link
-                      href="/(protected)/Nabolag"
-                      style={styles.menuItem as any}
-                      onPress={() => setMenuOpen(false)}
-                    >
-                      Nabolag
-                    </Link>
-                    <Link
-                      href="/(protected)/ForeningerScreen"
-                      style={styles.menuItem as any}
-                      onPress={() => setMenuOpen(false)}
-                    >
-                      Forening
-                    </Link>
-                    <Link
-                      href="/(protected)/Beskeder"
-                      style={styles.menuItem as any}
-                      onPress={() => setMenuOpen(false)}
-                    >
-                      Beskeder
-                    </Link>
-
+                  {/* klik-udenfor for at lukke */}
+                  <TouchableOpacity style={styles.overlay as any} onPress={() => setMenuOpen(false)} />
+                  <View style={styles.menu as any}>
+                    <Link href="/(protected)/Nabolag" style={styles.menuItem as any} onPress={() => setMenuOpen(false)}>Nabolag</Link>
+                    <Link href="/(protected)/ForeningerScreen" style={styles.menuItem as any} onPress={() => setMenuOpen(false)}>Forening</Link>
+                    <Link href="/(protected)/Beskeder" style={styles.menuItem as any} onPress={() => setMenuOpen(false)}>Beskeder</Link>
                     <TouchableOpacity onPress={signOut} style={styles.logout}>
                       <Text style={styles.logoutTxt}>Log ud</Text>
                     </TouchableOpacity>
@@ -123,7 +108,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   brand: { color: "#fff", fontSize: 18, fontWeight: "800" },
-  right: { flexDirection: "row", alignItems: "center", gap: 16 },
+  right: { flexDirection: "row", alignItems: "center" },
 
   link: { color: "#cbd5e1", fontSize: 14, textDecorationLine: "none" },
 
@@ -147,11 +132,11 @@ const styles = StyleSheet.create({
   burgerIcon: { color: "#e2e8f0", fontWeight: "900", fontSize: 16 },
 
   overlay: {
-    position: "fixed" as any,
-    inset: 0 as any,
+    position: "fixed",
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "transparent",
-    zIndex: 999, // under menu (1000), over indhold
-  },
+    zIndex: 999,
+  } as any,
 
   menu: {
     position: "absolute",
@@ -164,7 +149,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 8,
     zIndex: 1000,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.35)" as any,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
   },
   menuItem: { color: "#e2e8f0", fontSize: 14, paddingVertical: 10, paddingHorizontal: 12, textDecorationLine: "none" },
   logout: {
