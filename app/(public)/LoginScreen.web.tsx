@@ -1,35 +1,29 @@
 // app/(public)/LoginScreen.web.tsx
+import { Link, useRouter } from "expo-router";
 import Head from "expo-router/head";
-import { useRouter, Link } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../utils/supabase";
-
-// ⚠️ BIG VISIBLE VERSION TAG so we can verify this file is actually live:
-const BUILD_TAG = "WEB-LOGIN v7 (pure HTML form)";
 
 export const options = { headerShown: false };
 
 export default function LoginScreenWeb() {
   const router = useRouter();
+
   const emailRef = useRef<HTMLInputElement>(null);
   const passRef  = useRef<HTMLInputElement>(null);
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [err, setErr]           = useState<string | null>(null);
+  const [showPw, setShowPw]     = useState(false);
 
   useEffect(() => {
-    // Ensure page can scroll and that no parent disables pointer events.
+    // Sikr at intet forhindrer scroll/klik
     document.documentElement.style.overflow = "auto";
     document.body.style.overflow = "auto";
     document.body.style.pointerEvents = "auto";
-
-    // If *anything* tries to overlay, we still want our form clickable:
-    const root = document.getElementById("__next") || document.body;
-    (root as HTMLElement).style.pointerEvents = "auto";
-
-    // Focus email on mount
+    // Fokus i email-felt ved load
     emailRef.current?.focus();
   }, []);
 
@@ -58,21 +52,12 @@ export default function LoginScreenWeb() {
     <div style={styles.page}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Cache-buster to avoid stale bundles while we debug */}
+        {/* lille cache-buster i udvikling */}
         <meta httpEquiv="Cache-Control" content="no-store" />
+        <title>Log ind • Liguster</title>
       </Head>
 
-      {/* Debug banner so we *see* that this file is being used */}
-      <div style={styles.debugBanner}>
-        <span>{BUILD_TAG}</span>
-        <a href="/" style={styles.backLink}>‹ Til forsiden</a>
-      </div>
-
-      <form
-        onSubmit={submit}
-        // High z-index + explicit pointer events guarantees clicks reach inputs
-        style={styles.card}
-      >
+      <form onSubmit={submit} style={styles.card}>
         <h1 style={styles.title}>Log ind</h1>
 
         {err ? <div style={styles.error}>{err}</div> : null}
@@ -84,23 +69,33 @@ export default function LoginScreenWeb() {
           type="email"
           inputMode="email"
           autoComplete="username"
-          placeholder="you@email.dk"
+          placeholder="dig@email.dk"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           style={styles.input}
         />
 
         <label htmlFor="password" style={styles.label}>Password</label>
-        <input
-          id="password"
-          ref={passRef}
-          type="password"
-          autoComplete="current-password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={styles.input}
-        />
+        <div style={styles.pwRow}>
+          <input
+            id="password"
+            ref={passRef}
+            type={showPw ? "text" : "password"}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{ ...styles.input, marginBottom: 0, flex: 1 }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPw(s => !s)}
+            style={styles.togglePw}
+            aria-label={showPw ? "Skjul password" : "Vis password"}
+          >
+            {showPw ? "Skjul" : "Vis"}
+          </button>
+        </div>
 
         <button type="submit" disabled={loading} style={styles.button}>
           {loading ? "Logger ind…" : "LOG IND"}
@@ -114,105 +109,138 @@ export default function LoginScreenWeb() {
   );
 }
 
-/* Inline CSS-in-JS: dead simple, web-native, with defensive z-index/pointerEvents.
-   Change colors here while debugging so it’s obvious which build is live. */
+/* ───────────────────────── Tema & Styles ─────────────────────────
+   Skift farver her – resten af styles læser fra THEME.
+*/
+const THEME = {
+  // Baggrund (lækker lys blågrå som ønsket)
+  pageBg: "#7C8996",
+
+  // Kort (loginkortet)
+  cardBg: "#0b1220",
+  cardBorder: "#1D2A38",
+
+  // Tekst
+  text: "#FFFFFF",
+  sub: "#cbd5e1",
+
+  // Input
+  inputBg: "#FFFFFF",
+  inputBorder: "#e5e8ec",
+  inputText: "#0b1220",
+  inputPlaceholder: "#6b7280",
+
+  // Knap
+  btnBg: "#FFFFFF",
+  btnText: "#0b1220",
+
+  // Fejl
+  errBg: "#FEE2E2",
+  errText: "#7f1d1d",
+  errBorder: "#ef4444",
+};
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
-    minHeight: "100vh",
-    background: "#0f1623",        // page bg
+    minHeight: "100vh",           // lader vinduet scrolle frit
+    background: THEME.pageBg,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
+    // en diskret “papir”-effekt
+    backgroundImage:
+      "radial-gradient(ellipse at top, rgba(255,255,255,0.14), transparent 60%)",
   },
-  debugBanner: {
-    position: "fixed",
-    top: 72,
-    left: 24,
-    background: "#22c55e",
-    color: "#0b1220",
-    fontWeight: 900,
-    padding: "6px 10px",
-    borderRadius: 10,
-    zIndex: 9999,
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
-    pointerEvents: "auto", // clickable
-  },
-  backLink: {
-    color: "#0b1220",
-    textDecoration: "underline",
-    fontWeight: 800,
-  },
+
   card: {
-    width: 360,
-    maxWidth: "90vw",
-    background: "#0b1220",
-    border: "1px solid #223",
+    width: 380,
+    maxWidth: "92vw",
+    background: THEME.cardBg,
+    border: `1px solid ${THEME.cardBorder}`,
     borderRadius: 16,
-    padding: 20,
-    boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
-    zIndex: 1000,
-    pointerEvents: "auto",
+    padding: 22,
+    boxShadow: "0 14px 40px rgba(0,0,0,0.35)",
   },
+
   title: {
-    color: "#fff",
+    color: THEME.text,
     textAlign: "center" as const,
     fontSize: 26,
     fontWeight: 800,
-    margin: "2px 0 14px",
+    margin: "4px 0 16px",
+    letterSpacing: 0.2,
   },
+
   label: {
-    color: "#cbd5e1",
+    color: THEME.sub,
     fontSize: 12,
     fontWeight: 700,
     marginBottom: 6,
     display: "block",
   },
+
   input: {
     width: "100%",
     height: 48,
     borderRadius: 12,
-    border: "1px solid #e5e8ec",
-    background: "#fff",
-    color: "#0b1220",
+    border: `1px solid ${THEME.inputBorder}`,
+    background: THEME.inputBg,
+    color: THEME.inputText,
     padding: "0 14px",
     marginBottom: 14,
     fontSize: 16,
     outline: "none",
-    WebkitAppearance: "none",
-    appearance: "none",
-    boxShadow: "inset 0 0 0 1px transparent",
   },
+
+  pwRow: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+
+  togglePw: {
+    height: 48,
+    padding: "0 12px",
+    borderRadius: 12,
+    border: `1px solid ${THEME.inputBorder}`,
+    background: "#f3f4f6",
+    color: "#111827",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+
   button: {
     width: "100%",
     height: 52,
     borderRadius: 14,
     border: "0",
-    background: "#fff",
-    color: "#0b1220",
+    background: THEME.btnBg,
+    color: THEME.btnText,
     fontWeight: 900,
     letterSpacing: 1,
     cursor: "pointer",
-    marginTop: 2,
+    marginTop: 4,
   },
+
   error: {
-    background: "#fecaca",
-    color: "#7f1d1d",
-    border: "1px solid #ef4444",
+    background: THEME.errBg,
+    color: THEME.errText,
+    border: `1px solid ${THEME.errBorder}`,
     padding: "8px 10px",
     borderRadius: 10,
     marginBottom: 12,
     fontSize: 13,
     fontWeight: 700,
   },
+
   footerRow: {
-    marginTop: 10,
+    marginTop: 12,
     display: "flex",
     justifyContent: "center",
   },
+
   footerLink: {
     color: "#9fb3ff",
     textDecoration: "underline",
