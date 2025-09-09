@@ -1,4 +1,3 @@
-// app/(protected)/Nabolag.web.tsx
 import { decode } from "base64-arraybuffer";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -23,13 +22,13 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* Theme */
+/* ─────────────────────────  Tema/konstanter  ───────────────────────── */
 const COLORS = {
-  pageBg: "#7C8996",        // requested
-  panel: "#0b1220",
+  pageBg: "#7C8996",       // ønsket baggrund
+  shell: "#0b1220",        // mørk panel (bruges i navbar via layout)
   text: "#0b1220",
-  sub: "#334155",
-  white: "#fff",
+  sub: "#475569",
+  white: "#ffffff",
   blue: "#131921",
   blueTint: "#25489022",
   fieldBorder: "#1f2937",
@@ -40,29 +39,30 @@ const RADII = { sm: 8, md: 10, lg: 14, xl: 18 };
 const SHADOW = {
   card: {
     shadowColor: "#000",
-    shadowOpacity: 0.07,
-    shadowRadius: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
 };
 const distances = [1, 2, 3, 5, 10, 20, 50];
 
-/** Shared layout with layout.web.tsx */
 const LAYOUT = {
   MAX_W: 1180,
   PAD_X: 24,
   GAP: 16,
-  MAX_CARD_W_SINGLE: 560,
+  SINGLE_MAX_CARD_W: 560,
+  BREAK_3: 1024,
+  BREAK_2: 680,
 };
 
-/* Helpers */
+/* ───────────────────────────────  Hjælpere  ─────────────────────────────── */
 function fmtKm(n: number) {
   if (Number.isNaN(n)) return "";
   return `${n.toFixed(1)} km`;
 }
 
-/* Small selectors */
+/* ───────────────────────────────  Små UI’er  ─────────────────────────────── */
 function KategoriSelector({
   value,
   onChange,
@@ -73,7 +73,7 @@ function KategoriSelector({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <TouchableOpacity style={styles.iconBtn} onPress={() => setOpen(true)} activeOpacity={0.85}>
+      <TouchableOpacity style={styles.iconBtn} onPress={() => setOpen(true)} activeOpacity={0.88}>
         <Text style={styles.iconBtnText}>▼</Text>
       </TouchableOpacity>
 
@@ -155,7 +155,7 @@ function RadiusSelector({
   );
 }
 
-/* Create Post (web) */
+/* ─────────────────────  Opret opslag (web-dialog)  ───────────────────── */
 function OpretOpslagWeb({
   visible,
   onClose,
@@ -328,7 +328,7 @@ function OpretOpslagWeb({
   );
 }
 
-/* Detail modal */
+/* ─────────────────────────────  Detalje-modal  ───────────────────────────── */
 function OpslagDetaljeWeb({
   visible,
   opslag,
@@ -379,7 +379,7 @@ function OpslagDetaljeWeb({
   );
 }
 
-/* Screen */
+/* ─────────────────────────────────────  Skærm  ───────────────────────────────────── */
 export default function NabolagWeb() {
   const {
     userId,
@@ -402,17 +402,18 @@ export default function NabolagWeb() {
   const [detaljeVisible, setDetaljeVisible] = useState(false);
   const [valgtOpslag, setValgtOpslag] = useState<Post | null>(null);
 
+  // Responsiv gridgeometri
   const { width } = useWindowDimensions();
-
-  // Container width we actually use (matches layout)
-  const containerWidth = Math.min(width, LAYOUT.MAX_W);
-  // 3 columns on desktop, 2 on tablet, 1 on mobile
-  const numColumns = containerWidth >= 1000 ? 3 : containerWidth >= 680 ? 2 : 1;
+  const containerW = Math.min(width, LAYOUT.MAX_W);
+  const numColumns = containerW >= LAYOUT.BREAK_3 ? 3 : containerW >= LAYOUT.BREAK_2 ? 2 : 1;
   const isGrid = numColumns > 1;
 
-  const cardWidth = isGrid
-    ? (containerWidth - LAYOUT.PAD_X * 2 - LAYOUT.GAP * (numColumns - 1)) / numColumns
-    : Math.min(LAYOUT.MAX_CARD_W_SINGLE, containerWidth - LAYOUT.PAD_X * 2);
+  // Pixel-safe: gulv card-bredden så afrundingsfejl ikke skærer i højre side.
+  const rawCardW =
+    (containerW - LAYOUT.PAD_X * 2 - (isGrid ? LAYOUT.GAP * (numColumns - 1) : 0)) /
+    (isGrid ? numColumns : 1);
+  const cardW = Math.floor(rawCardW); // <- vigtig for at undgå clipping
+  const singleW = Math.min(LAYOUT.SINGLE_MAX_CARD_W, containerW - LAYOUT.PAD_X * 2);
 
   const distanceText = useMemo(() => {
     if (!valgtOpslag || !userLocation || !valgtOpslag.latitude || !valgtOpslag.longitude) return null;
@@ -431,14 +432,16 @@ export default function NabolagWeb() {
       ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!)
       : NaN;
 
+    const widthStyle = { width: isGrid ? cardW : singleW };
+
     return (
       <TouchableOpacity
         onPress={() => {
           setValgtOpslag(item);
           setDetaljeVisible(true);
         }}
-        style={{ width: cardWidth, marginBottom: LAYOUT.GAP }}
-        activeOpacity={0.9}
+        style={[{ marginBottom: LAYOUT.GAP }, widthStyle]}
+        activeOpacity={0.92}
       >
         <View style={styles.card}>
           {!!item.image_url && <Image source={{ uri: item.image_url }} style={styles.cardImage} />}
@@ -460,27 +463,33 @@ export default function NabolagWeb() {
     );
   };
 
+  const isNarrow = containerW < 520;
+
   return (
     <View style={styles.page}>
       <View style={styles.container}>
-        {/* Title removed (you already have it in navbar). Keep only controls */}
+        {/* Primær CTA */}
         <TouchableOpacity style={styles.primaryCta} onPress={() => setOpretVisible(true)} activeOpacity={0.88}>
           <Text style={styles.primaryCtaText}>OPRET OPSLAG</Text>
         </TouchableOpacity>
 
-        <View style={styles.filterRow}>
+        {/* Filtre — stakkes på smal skærm */}
+        <View style={[styles.filterRow, isNarrow && { flexDirection: "column", alignItems: "stretch", gap: 10 }]}>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={styles.searchInput}
+            style={[styles.searchInput, isNarrow && { width: "100%" }]}
             placeholder="Søg i opslag…"
             placeholderTextColor="#64748b"
             returnKeyType="search"
           />
-          <KategoriSelector value={kategoriFilter} onChange={setKategoriFilter} />
-          <RadiusSelector value={radius} onChange={handleRadiusChange} />
+          <View style={[styles.filtersRight, isNarrow && { width: "100%", justifyContent: "space-between" }]}>
+            <KategoriSelector value={kategoriFilter} onChange={setKategoriFilter} />
+            <RadiusSelector value={radius} onChange={handleRadiusChange} />
+          </View>
         </View>
 
+        {/* Liste */}
         {loading ? (
           <ActivityIndicator size="large" color="#0b1220" style={{ marginTop: 30 }} />
         ) : (
@@ -492,8 +501,8 @@ export default function NabolagWeb() {
               paddingTop: 12,
               paddingBottom: 56,
               paddingHorizontal: LAYOUT.PAD_X,
-              alignItems: "center", // keeps grid centered
-              width: containerWidth, // important: match container
+              alignItems: "center",
+              width: containerW,      // <- lås til containeren
               alignSelf: "center",
             }}
             keyboardShouldPersistTaps="handled"
@@ -506,6 +515,7 @@ export default function NabolagWeb() {
         )}
       </View>
 
+      {/* Modaler */}
       <OpretOpslagWeb
         visible={opretVisible}
         onClose={() => setOpretVisible(false)}
@@ -525,7 +535,7 @@ export default function NabolagWeb() {
   );
 }
 
-/* Styles */
+/* ─────────────────────────────────────  Styles  ───────────────────────────────────── */
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.pageBg },
   container: {
@@ -533,7 +543,7 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
     paddingHorizontal: LAYOUT.PAD_X,
-    paddingTop: 20,
+    paddingTop: 18,
   },
 
   /* CTA */
@@ -551,7 +561,7 @@ const styles = StyleSheet.create({
   },
   primaryCtaText: { color: COLORS.white, fontSize: 16, fontWeight: "900", letterSpacing: 1 },
 
-  /* Filters */
+  /* Filtre */
   filterRow: {
     width: "100%",
     flexDirection: "row",
@@ -560,9 +570,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 10,
   },
+  filtersRight: { flexDirection: "row", alignItems: "center", gap: 10 },
   searchInput: {
     flex: 1,
-    backgroundColor: COLORS.white, // keep inputs white
+    backgroundColor: COLORS.white,
     borderRadius: RADII.sm,
     paddingHorizontal: 15,
     paddingVertical: 12,
@@ -583,7 +594,7 @@ const styles = StyleSheet.create({
   },
   iconBtnText: { fontSize: 18, color: COLORS.white, fontWeight: "bold", marginTop: -2 },
   radiusBtn: {
-    minWidth: 64,
+    minWidth: 72,
     height: 45,
     paddingHorizontal: 14,
     borderRadius: RADII.sm,
