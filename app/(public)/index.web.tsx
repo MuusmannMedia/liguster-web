@@ -1,65 +1,71 @@
-// app/(public)/index.web.tsx
-import { useRouter } from "expo-router";
-import React from "react";
-import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Link, router } from "expo-router";
+import Head from "expo-router/head";
+import React, { useEffect } from "react";
+import { Image, StyleSheet, Text, View } from "react-native";
+import { useSession } from "../../hooks/useSession";
 
-import LogoNEG from "../../assets/images/Liguster-logo-NEG.png";
+export default function PublicIndexWeb() {
+  const { session, loading } = useSession();
 
-export default function IndexWeb() {
-  const router = useRouter();
+  // Hvis logget ind → direkte til appen
+  useEffect(() => {
+    if (!loading && session) {
+      router.replace("/(protected)/Nabolag");
+    }
+  }, [loading, session]);
 
+  // Mens vi afklarer session, undgå at blinke landing
+  if (loading) return null;
+
+  // Ikke logget ind → vis landing
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      <Image source={LogoNEG} style={styles.heroImage} resizeMode="contain" />
+    <View style={styles.page}>
+      <Head>
+        <title>Liguster</title>
+        <meta name="description" content="Din lokale platform for fællesskab, hjælp og genbrug." />
+      </Head>
 
-      <Text style={styles.title}>Velkommen til Liguster</Text>
-      <Text style={styles.subtitle}>
-        Din lokale platform for fællesskab, hjælp og genbrug 🌱
-      </Text>
-
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={styles.btn}
-          onPress={() => router.push("/LoginScreen")}
-        >
-          <Text style={styles.btnText}>Log ind</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={[styles.btn, styles.btnSecondary]}
-          onPress={() => router.push("/OpretBruger")}
-        >
-          <Text style={styles.btnText}>Opret bruger</Text>
-        </TouchableOpacity>
+      <View style={styles.header}>
+        <Text style={styles.brand}>Liguster</Text>
+        <Link href="/LoginScreen" style={styles.topLogin}>Log ind</Link>
       </View>
-    </ScrollView>
+
+      <View style={styles.hero}>
+        {/* brug jeres egen grafik hvis I vil */}
+        <Image
+          source={{ uri: "https://dummyimage.com/200x200/0b1220/ffffff&text=L" }}
+          style={styles.logo}
+        />
+        <Text style={styles.title}>Velkommen til Liguster</Text>
+        <Text style={styles.sub}>Din lokale platform for fællesskab, hjælp og genbrug 🌱</Text>
+
+        <View style={styles.ctas}>
+          <Link href="/LoginScreen" style={[styles.cta, styles.ctaPrimary]}>Log ind</Link>
+          <Link href="/(public)/LoginScreen" style={[styles.cta, styles.ctaGhost]}>Opret bruger</Link>
+        </View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0f1623" },
-  container: {
-    flexGrow: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
+  page: { flex: 1, backgroundColor: "#0f1623" },
+  header: {
+    height: 64, paddingHorizontal: 24,
+    alignItems: "center", justifyContent: "space-between",
+    flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#1e293b",
+    backgroundColor: "#0b1220",
   },
-  heroImage: { width: 240, height: 240, marginBottom: 30 },
-  title: { fontSize: 28, fontWeight: "800", color: "#fff", marginBottom: 10, textAlign: "center" },
-  subtitle: {
-    fontSize: 16, color: "#cbd5e1", marginBottom: 30, textAlign: "center", maxWidth: 500,
-  },
-  buttons: { flexDirection: "row", gap: 16 },
-  btn: { backgroundColor: "#ffffff", paddingHorizontal: 22, paddingVertical: 14, borderRadius: 10 },
-  btnSecondary: { backgroundColor: "#94a3b8" },
-  btnText: { color: "#0f1623", fontWeight: "700", fontSize: 16 },
+  brand: { color: "#fff", fontWeight: "800", fontSize: 18 },
+  topLogin: { color: "#cbd5e1", fontSize: 14, textDecorationLine: "none" },
+
+  hero: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
+  logo: { width: 100, height: 100, marginBottom: 8, borderRadius: 20, backgroundColor: "#0b1220" },
+  title: { color: "#fff", fontSize: 24, fontWeight: "900" },
+  sub: { color: "#cbd5e1", fontSize: 14 },
+
+  ctas: { flexDirection: "row", gap: 12, marginTop: 10 },
+  cta: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, textDecorationLine: "none" } as any,
+  ctaPrimary: { backgroundColor: "#fff", color: "#0b1220", fontWeight: "800" } as any,
+  ctaGhost: { backgroundColor: "#1f2937", color: "#cbd5e1" } as any,
 });
