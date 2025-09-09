@@ -1,140 +1,182 @@
 // app/(public)/LoginScreen.web.tsx
-import { Link, router } from "expo-router";
-import React, { useState } from "react";
+import { Link, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from "../../utils/supabase";
 
-/* 🎨 Farver du kan ændre */
-const C = {
-  pageBg: "#7C8996",
-  cardBg: "#0f1623",
-  border: "#223",
-  text: "#ffffff",
-  inputBg: "#ffffff",
-  inputText: "#111827",
-  buttonBg: "#ffffff",
-  buttonText: "#171C22",
-};
+// ───────────────────────────────────────────────────────────────
+// WEB-FIRST LOGIN (no fixed overlays, no full-screen touchables)
+// - Uses real <form> and <input> on web to guarantee focus
+// - Pressing Enter submits the form
+// - No positioned elements above the inputs
+// ───────────────────────────────────────────────────────────────
 
 export const options = { headerShown: false };
 
 export default function LoginScreenWeb() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const onSubmit = useCallback(async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setErr(null);
-    const form = new FormData(e.currentTarget);
-    const email = String(form.get("email") || "").trim();
-    const password = String(form.get("password") || "");
+
     if (!email || !password) {
       setErr("Udfyld både email og password.");
       return;
     }
+
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
+
     if (error) {
-      setErr(error.message);
+      setErr(error.message || "Login fejlede.");
       return;
     }
     router.replace("/(protected)/Nabolag");
-  }
+  }, [email, password, router]);
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <h1 style={s.title}>Log ind</h1>
+    <View style={styles.page}>
+      <View style={styles.container}>
+        <Link href="/" style={styles.backLink} accessibilityRole="link">‹ Tilbage</Link>
 
-        <form onSubmit={onSubmit} style={s.form} autoComplete="on">
-          <label style={s.label}>
-            Email
-            <input
-              name="email"
-              type="email"
-              inputMode="email"
-              autoCapitalize="none"
-              autoCorrect="off"
-              autoComplete="email"
-              required
-              style={s.input}
-            />
-          </label>
+        <View style={styles.card}>
 
-          <label style={s.label}>
-            Password
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              style={s.input}
-            />
-          </label>
+          <Text style={styles.title}>Log ind</Text>
+          {err ? <Text style={styles.error}>{err}</Text> : null}
 
-          {err && <div style={s.error}>{err}</div>}
+          {/* ── WEB: use native inputs for bullet-proof focus ───────────────── */}
+          {Platform.OS === "web" ? (
+            <form
+              onSubmit={onSubmit}
+              // make absolutely sure pointer events are not blocked
+              style={{ width: "100%" }}
+            >
+              <input
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="username email"
+                placeholder="Email"
+                value={email}
+                onChange={(ev) => setEmail(ev.currentTarget.value)}
+                autoFocus
+                style={inputCss}
+              />
 
-          <button type="submit" style={s.button} disabled={loading}>
-            {loading ? "Logger ind…" : "LOG IND"}
-          </button>
-        </form>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder="Password"
+                value={password}
+                onChange={(ev) => setPassword(ev.currentTarget.value)}
+                style={inputCss}
+              />
 
-        <div style={{ marginTop: 12 }}>
-          <Link href="/" style={{ color: "#cbd5e1", textDecorationLine: "none" }}>
-            ‹ Til forsiden
-          </Link>
-        </div>
-      </div>
-    </div>
+              <button type="submit" disabled={loading} style={buttonCss}>
+                {loading ? "Logger ind…" : "LOG IND"}
+              </button>
+            </form>
+          ) : (
+            // Native fallback (won't be used on web but keeps file valid for native)
+            <TouchableOpacity onPress={onSubmit} style={styles.nativeOnlyBtn}>
+              <Text style={{ color: "#171C22", fontWeight: "700" }}>
+                {loading ? "Logger ind…" : "LOG IND"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </View>
   );
 }
 
-/* Ren CSS-in-JS så vi ikke rammer RNW-quirks */
-const s: Record<string, React.CSSProperties> = {
+/* ─────────────────────────  Styles  ───────────────────────── */
+
+const styles = StyleSheet.create({
   page: {
-    minHeight: "calc(100vh - 64px - 60px)", // 64 topbar + 60 footer
-    display: "grid",
-    placeItems: "center",
+    // keep it scrollable and click-through
+    minHeight: "100vh" as any,
+    backgroundColor: "#0f1623",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
-    background: C.pageBg,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 420,
+  },
+  backLink: {
+    color: "#cbd5e1",
+    textDecorationLine: "none",
+    marginBottom: 10,
+    display: "inline-flex",
   },
   card: {
-    width: 340,
-    background: C.cardBg,
+    width: "100%",
+    backgroundColor: "#0b1220",
     borderRadius: 14,
-    padding: 20,
-    border: `1px solid ${C.border}`,
-    color: C.text,
-    boxShadow: "0 10px 25px rgba(0,0,0,.25)",
+    padding: 22,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    boxShadow: "0 6px 24px rgba(0,0,0,0.25)" as any,
   },
-  title: { margin: 0, marginBottom: 16, fontSize: 26, fontWeight: 800 },
-  form: { display: "grid", gap: 12 },
-  label: { display: "grid", gap: 6, fontSize: 13, color: "#cbd5e1" },
-  input: {
-    height: 46,
-    borderRadius: 10,
-    border: "1px solid #e5e7eb",
-    padding: "0 12px",
-    background: C.inputBg,
-    color: C.inputText,
-    fontSize: 16,
-  },
-  button: {
-    height: 50,
-    borderRadius: 12,
-    border: 0,
-    background: C.buttonBg,
-    color: C.buttonText,
-    fontWeight: 800,
-    letterSpacing: 1,
-    cursor: "pointer",
-  },
+  title: { color: "#fff", fontSize: 26, fontWeight: "800", textAlign: "center", marginBottom: 14 },
   error: {
-    color: "#fecaca",
-    background: "#7f1d1d",
-    border: "1px solid #ef4444",
+    backgroundColor: "#fee2e2",
+    color: "#991b1b",
     borderRadius: 8,
-    padding: "8px 10px",
-    fontSize: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+    fontSize: 14,
   },
+  // Native placeholder button to satisfy RN compiler; not used on web.
+  nativeOnlyBtn: {
+    backgroundColor: "#fff",
+    height: 48,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+});
+
+/* ─────────────────────────  Inline CSS for <input>/<button>  ─────────────────────────
+   Using inline CSS objects keeps everything in this file and avoids odd global styles.
+   These are web-only (applied to real DOM elements).
+*/
+
+const inputCss: React.CSSProperties = {
+  width: "100%",
+  height: 48,
+  borderRadius: 10,
+  border: "1px solid #334155",
+  background: "#ffffff",
+  color: "#0b1220",
+  padding: "0 14px",
+  fontSize: 16,
+  outline: "none",
+  marginBottom: 12,
+  boxSizing: "border-box",
+};
+
+const buttonCss: React.CSSProperties = {
+  width: "100%",
+  height: 50,
+  borderRadius: 12,
+  border: "none",
+  background: "#ffffff",
+  color: "#171C22",
+  fontSize: 16,
+  fontWeight: 800,
+  letterSpacing: 1,
+  cursor: "pointer",
+  marginTop: 4,
 };
