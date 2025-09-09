@@ -1,4 +1,3 @@
-// app/(protected)/Nabolag.web.tsx
 import { decode } from "base64-arraybuffer";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -12,7 +11,7 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* ───────── TEMA (skift farver/spacing her) ───────── */
+/* ───────── TEMA ───────── */
 const THEME = {
   pageBg: "#7C8996",
   boardBg: "#ffffff",
@@ -36,7 +35,7 @@ const SHADOW = {
 const distances = [1, 2, 3, 5, 10, 20, 50];
 const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* ───────── Små UI-klodser ───────── */
+/* ───────── UI-klodser ───────── */
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.chip}>
@@ -109,9 +108,7 @@ function RadiusPicker({ value, onChange }: { value: number; onChange: (v: number
 function OpretOpslagWeb({
   visible, onClose, onSubmit, currentUserId,
 }: {
-  visible: boolean; onClose: () => void;
-  onSubmit: (payload: any) => Promise<void>;
-  currentUserId: string | null;
+  visible: boolean; onClose: () => void; onSubmit: (payload: any) => Promise<void>; currentUserId: string | null;
 }) {
   const [overskrift, setOverskrift] = useState("");
   const [text, setText] = useState("");
@@ -235,20 +232,20 @@ function OpslagDetaljeWeb({
             <TouchableOpacity onPress={onClose}><Text style={{ fontSize: 18, fontWeight: "900" }}>✕</Text></TouchableOpacity>
           </View>
 
-          {opslag ? (
-            <View>
-              {!!opslag.image_url && (
-                <Image source={{ uri: opslag.image_url }} style={{ width: "100%", height: 280, borderRadius: RADII.md, marginBottom: 10 }} />
-              )}
-              {!!opslag.kategori && <Chip>{opslag.kategori}</Chip>}
-              <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.cardInk }}>{opslag.overskrift}</Text>
-              {!!opslag.omraade && <Text style={{ color: "#475569", marginTop: 2 }}>{opslag.omraade}</Text>}
-              {!!distanceText && <Text style={{ color: "#6b7280", marginTop: 2 }}>{distanceText}</Text>}
-              {!!opslag.text && <Text style={{ color: "#111827", marginTop: 10, lineHeight: 20 }}>{opslag.text}</Text>}
-            </View>
-          ) : (
-            <Text>Indlæser…</Text>
-          )}
+        {opslag ? (
+          <View>
+            {!!opslag.image_url && (
+              <Image source={{ uri: opslag.image_url }} style={{ width: "100%", height: 280, borderRadius: RADII.md, marginBottom: 10 }} />
+            )}
+            {!!opslag.kategori && <Chip>{opslag.kategori}</Chip>}
+            <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.cardInk }}>{opslag.overskrift}</Text>
+            {!!opslag.omraade && <Text style={{ color: "#475569", marginTop: 2 }}>{opslag.omraade}</Text>}
+            {!!distanceText && <Text style={{ color: "#6b7280", marginTop: 2 }}>{distanceText}</Text>}
+            {!!opslag.text && <Text style={{ color: "#111827", marginTop: 10, lineHeight: 20 }}>{opslag.text}</Text>}
+          </View>
+        ) : (
+          <Text>Indlæser…</Text>
+        )}
 
           <TouchableOpacity onPress={onClose} style={[styles.action, styles.btn, { marginTop: 16 }]}>
             <Text style={styles.actionText}>Luk</Text>
@@ -261,7 +258,7 @@ function OpslagDetaljeWeb({
 
 /* ───────── Skærm ───────── */
 export default function NabolagWeb() {
-  // Sikr at intet globalt spærrer scroll/klik (backup – hovedfix ligger i layout)
+  // Backup: sikre scroll/klik globalt
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.style.overflow = "auto";
@@ -353,7 +350,7 @@ export default function NabolagWeb() {
             style={{ width: "100%" }}
             contentContainerStyle={{
               paddingHorizontal: GRID.padX,
-              paddingBottom: 56,
+              paddingBottom: 72,
               alignItems: "center",
               alignSelf: "center",
               maxWidth: boardW,
@@ -362,8 +359,8 @@ export default function NabolagWeb() {
             columnWrapperStyle={isGrid ? { gap: GRID.gap } : undefined}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
-            /* VIGTIGT: Vinduet scroller – ikke FlatList */
-            scrollEnabled={false}
+            // MOBIL-WEB: lad FlatList scrolle selv
+            scrollEnabled={true}
             removeClippedSubviews={false}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={<Text style={{ color: THEME.sub, marginTop: 14 }}>Ingen opslag fundet.</Text>}
@@ -372,7 +369,6 @@ export default function NabolagWeb() {
         )}
       </View>
 
-      {/* Modaler */}
       <OpretOpslagWeb
         visible={createOpen}
         onClose={() => setCreateOpen(false)}
