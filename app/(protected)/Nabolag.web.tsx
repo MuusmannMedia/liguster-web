@@ -25,7 +25,6 @@ import { supabase } from "../../utils/supabase";
 
 /* ╔════════════════════════════════ THEME (ALT KAN TILPASSES HER) ═══════════════════════════════╗
    ║ Skift farver, radii, skygger og breakpoints.                                                  ║
-   ║ - Baggrundsfarven (#7C8996) ligger her, men på web styrer _layout.web.tsx også baggrunden.    ║
    ╚═══════════════════════════════════════════════════════════════════════════════════════════════╝ */
 const THEME = {
   // ── Farver ────────────────────────────────────────────────────────────────────────────────
@@ -62,10 +61,10 @@ const THEME = {
   brk2: 680,       // ← EDIT HERE  (>= 2 kolonner)
 } as const;
 
-const distances = [1, 2, 3, 5, 10, 20, 50]; // radius-valg
+const distances = [1, 2, 3, 5, 10, 20, 50];
 const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* ╭────────────────────────────────────────── Helpers ───────────────────────────────────────────╮ */
+/* Små UI-hjælpere */
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.chip}>
@@ -73,9 +72,7 @@ function Chip({ children }: { children: React.ReactNode }) {
     </View>
   );
 }
-/* ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ */
 
-/* ╭────────────────────────────────────── Kategori & Radius pickers ─────────────────────────────╮ */
 function KategoriPicker({
   value,
   onChange,
@@ -180,9 +177,8 @@ function RadiusPicker({
     </>
   );
 }
-/* ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ */
 
-/* ╭──────────────────────────────────────  Opret opslag (web)  ─────────────────────────────────╮ */
+/* ─────────────────────────  Opret opslag (web)  ───────────────────────── */
 function OpretOpslagWeb({
   visible,
   onClose,
@@ -347,9 +343,8 @@ function OpretOpslagWeb({
     </Modal>
   );
 }
-/* ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ */
 
-/* ╭──────────────────────────────────────  Detalje-modal (web)  ────────────────────────────────╮ */
+/* ─────────────────────────  Detalje-modal  ───────────────────────── */
 function OpslagDetaljeWeb({
   visible,
   opslag,
@@ -395,9 +390,8 @@ function OpslagDetaljeWeb({
     </Modal>
   );
 }
-/* ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ */
 
-/* ╭────────────────────────────────────────────  Skærm  ─────────────────────────────────────────╮ */
+/* ─────────────────────────  Skærm  ───────────────────────── */
 export default function NabolagWeb() {
   const {
     userId,
@@ -418,7 +412,7 @@ export default function NabolagWeb() {
 
   const { width } = useWindowDimensions();
 
-  // Board-beregninger (centreret grid, ingen “overskæring” i højre side)
+  // Board-beregninger (centreret grid)
   const boardW = Math.min(width, THEME.boardMaxW);
   const cols = boardW >= THEME.brk3 ? 3 : boardW >= THEME.brk2 ? 2 : 1;
   const isGrid = cols > 1;
@@ -519,7 +513,7 @@ export default function NabolagWeb() {
           </View>
         </View>
 
-        {/* Grid */}
+        {/* Grid — VIGTIGT: scrollEnabled={false} så siden (layoutets ScrollView) kan scrolle */}
         {loading ? (
           <ActivityIndicator size="large" color={THEME.ink} style={{ marginTop: 20 }} />
         ) : (
@@ -540,6 +534,7 @@ export default function NabolagWeb() {
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={<Text style={{ color: THEME.sub, marginTop: 14 }}>Ingen opslag fundet.</Text>}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.ink]} />}
+            scrollEnabled={false}   // ← FIX: deaktiver FlatList-scroll pga. ScrollView i _layout.web.tsx
           />
         )}
       </View>
@@ -563,13 +558,12 @@ export default function NabolagWeb() {
     </View>
   );
 }
-/* ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ */
 
 /* ╔══════════════════════════════════════  STYLES  ═════════════════════════════════════════════╗ */
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: THEME.pageBg,        // ← EDIT HERE (kan overstyres i _layout.web.tsx)
+    backgroundColor: THEME.pageBg,        // ← EDIT HERE
     alignItems: "center",
   },
 
@@ -577,7 +571,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.boardBg,
     borderRadius: THEME.radius.xl,
     ...THEME.shadowSoft,
-    marginTop: 16,                         // luft under fixed navbar
+    marginTop: 16,                         // luft under navbar
     marginBottom: 18,
   },
 
@@ -688,4 +682,3 @@ const styles = StyleSheet.create({
   action: { borderRadius: THEME.radius.md, paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   actionText: { color: "#fff", fontSize: 14, fontWeight: "900" },
 });
-/* ╚══════════════════════════════════════════════════════════════════════════════════════════════╝ */
