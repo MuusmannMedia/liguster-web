@@ -2,7 +2,7 @@
 import { Link, router, Slot } from "expo-router";
 import Head from "expo-router/head";
 import React, { useCallback, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native"; // <-- Platform importeret
 import { useSession } from "../../hooks/useSession";
 import { supabase } from "../../utils/supabase";
 
@@ -26,6 +26,7 @@ export default function ProtectedWebLayout() {
         <style>{`
           html, body, #root, #__next { height: auto !important; overflow: auto !important; }
           body { margin: 0; position: static !important; background:#0f1623; -webkit-overflow-scrolling: touch; }
+          /* skjul enhver footer, også hvis noget andet renderer en */
           footer, .footer, #footer, .bottom-nav, #bottom-nav, [data-footer] { display:none !important; }
         `}</style>
       </Head>
@@ -37,7 +38,7 @@ export default function ProtectedWebLayout() {
         </TouchableOpacity>
 
         <View style={styles.right}>
-          {/* Desktop-links vises altid */}
+          {/* Desktop-links */}
           {!isMobile && (
             <>
               <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
@@ -46,7 +47,7 @@ export default function ProtectedWebLayout() {
             </>
           )}
 
-          {/* Mobil: burger (kun hvis logget ind) */}
+          {/* Mobil burger */}
           {isMobile && isAuthed && (
             <View style={styles.burgerWrap} pointerEvents="auto">
               <TouchableOpacity
@@ -102,12 +103,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: "#1e293b",
     paddingHorizontal: 24,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    position: "sticky" as any, top: 0, // sikrer at den ligger øverst
-    zIndex: 1000,                       // <- vigtig for touch & layering
+    position: "sticky" as any, top: 0,
+    zIndex: 1000, // vigtigt for at fange taps over indhold
   },
   brand: { color: "#fff", fontSize: 18, fontWeight: "800" },
   right: { flexDirection: "row", alignItems: "center", gap: 16 },
-
   link: { color: "#cbd5e1", fontSize: 14, textDecorationLine: "none" },
 
   cta: { borderWidth: 1, borderColor: "#334155", borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
@@ -124,9 +124,8 @@ const styles = StyleSheet.create({
     position: "absolute", right: 0, top: 44, minWidth: 200,
     backgroundColor: "#0b1220", borderWidth: 1, borderColor: "#1e293b",
     borderRadius: 12, paddingVertical: 8,
-    zIndex: 2000,           // <- menu over alt
-    // Android/web elevates også
-    ...(Platform as any)?.OS !== "ios" ? { elevation: 12 } : {},
+    zIndex: 2000,
+    elevation: 12 as any, // web ignorerer, native giver skygge
   },
   menuItem: { color: "#e2e8f0", fontSize: 14, paddingVertical: 10, paddingHorizontal: 12 } as any,
   logout: { marginTop: 6, marginHorizontal: 8, paddingVertical: 10, borderRadius: 10, backgroundColor: "#fff", alignItems: "center" },
