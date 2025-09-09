@@ -23,7 +23,6 @@ export default function LoginScreenWeb() {
     document.documentElement.style.overflow = "auto";
     document.body.style.overflow = "auto";
     document.body.style.pointerEvents = "auto";
-    // Fokus i email-felt ved load
     emailRef.current?.focus();
   }, []);
 
@@ -52,7 +51,6 @@ export default function LoginScreenWeb() {
     <div style={styles.page}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* lille cache-buster i udvikling */}
         <meta httpEquiv="Cache-Control" content="no-store" />
         <title>Log ind • Liguster</title>
       </Head>
@@ -76,7 +74,9 @@ export default function LoginScreenWeb() {
         />
 
         <label htmlFor="password" style={styles.label}>Password</label>
-        <div style={styles.pwRow}>
+
+        {/* Samme bredde som email: knappen ligger ovenpå til højre */}
+        <div style={styles.pwWrap}>
           <input
             id="password"
             ref={passRef}
@@ -85,12 +85,13 @@ export default function LoginScreenWeb() {
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ ...styles.input, marginBottom: 0, flex: 1 }}
+            // ekstra paddingRight så teksten ikke ligger under knappen
+            style={{ ...styles.input, paddingRight: styles.toggleSize.width + 10 }}
           />
           <button
             type="button"
             onClick={() => setShowPw(s => !s)}
-            style={styles.togglePw}
+            style={{ ...styles.togglePw, width: styles.toggleSize.width }}
             aria-label={showPw ? "Skjul password" : "Vis password"}
           >
             {showPw ? "Skjul" : "Vis"}
@@ -109,50 +110,36 @@ export default function LoginScreenWeb() {
   );
 }
 
-/* ───────────────────────── Tema & Styles ─────────────────────────
-   Skift farver her – resten af styles læser fra THEME.
-*/
+/* ───────────────────────── Tema & Styles ───────────────────────── */
 const THEME = {
-  // Baggrund (lækker lys blågrå som ønsket)
   pageBg: "#7C8996",
-
-  // Kort (loginkortet)
   cardBg: "#0b1220",
   cardBorder: "#1D2A38",
-
-  // Tekst
   text: "#FFFFFF",
   sub: "#cbd5e1",
-
-  // Input
   inputBg: "#FFFFFF",
   inputBorder: "#e5e8ec",
   inputText: "#0b1220",
-  inputPlaceholder: "#6b7280",
-
-  // Knap
   btnBg: "#FFFFFF",
   btnText: "#0b1220",
-
-  // Fejl
   errBg: "#FEE2E2",
   errText: "#7f1d1d",
   errBorder: "#ef4444",
 };
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, any> = {
+  // størrelse på “Vis/Skjul”-knappen (bruges to steder)
+  toggleSize: { width: 64 },
+
   page: {
-    minHeight: "100vh",           // lader vinduet scrolle frit
+    minHeight: "100vh",
     background: THEME.pageBg,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    // en diskret “papir”-effekt
-    backgroundImage:
-      "radial-gradient(ellipse at top, rgba(255,255,255,0.14), transparent 60%)",
+    backgroundImage: "radial-gradient(ellipse at top, rgba(255,255,255,0.14), transparent 60%)",
   },
-
   card: {
     width: 380,
     maxWidth: "92vw",
@@ -162,16 +149,14 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 22,
     boxShadow: "0 14px 40px rgba(0,0,0,0.35)",
   },
-
   title: {
     color: THEME.text,
-    textAlign: "center" as const,
+    textAlign: "center",
     fontSize: 26,
     fontWeight: 800,
     margin: "4px 0 16px",
     letterSpacing: 0.2,
   },
-
   label: {
     color: THEME.sub,
     fontSize: 12,
@@ -179,7 +164,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 6,
     display: "block",
   },
-
   input: {
     width: "100%",
     height: 48,
@@ -191,18 +175,19 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 14,
     fontSize: 16,
     outline: "none",
+    boxSizing: "border-box" as const,
   },
 
-  pwRow: {
-    display: "flex",
-    gap: 8,
-    alignItems: "center",
+  // Password: gør knappen absolut, så rækken holder samme bredde som email
+  pwWrap: {
+    position: "relative" as const,
     marginBottom: 14,
   },
-
   togglePw: {
+    position: "absolute" as const,
+    top: 0,
+    right: 0,
     height: 48,
-    padding: "0 12px",
     borderRadius: 12,
     border: `1px solid ${THEME.inputBorder}`,
     background: "#f3f4f6",
@@ -223,7 +208,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     marginTop: 4,
   },
-
   error: {
     background: THEME.errBg,
     color: THEME.errText,
@@ -234,13 +218,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
   },
-
   footerRow: {
     marginTop: 12,
     display: "flex",
     justifyContent: "center",
   },
-
   footerLink: {
     color: "#9fb3ff",
     textDecoration: "underline",
