@@ -2,7 +2,6 @@
 import { decode } from "base64-arraybuffer";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { Link, router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,7 +23,7 @@ import {
 import { KATEGORIER, Post, useNabolag } from "../../hooks/useNabolag";
 import { supabase } from "../../utils/supabase";
 
-/* ─────────────────────────  TEMA / LAYOUT  ───────────────────────── */
+/* ───────────────────────── TEMA ───────────────────────── */
 const THEME = {
   pageBg: "#7C8996",
   boardBg: "#ffffff",
@@ -39,7 +38,6 @@ const THEME = {
 };
 const RADII = { sm: 8, md: 12, lg: 16, xl: 22 };
 const GRID = { boardMaxW: 1120, padX: 20, gap: 18, brk3: 1024, brk2: 680 };
-
 const SHADOW = {
   soft: {
     shadowColor: "#000",
@@ -53,7 +51,7 @@ const SHADOW = {
 const distances = [1, 2, 3, 5, 10, 20, 50];
 const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* ─────────────────────────  Små komponenter  ───────────────────────── */
+/* ───────────────────────── UI ───────────────────────── */
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.chip}>
@@ -126,7 +124,7 @@ function RadiusPicker({ value, onChange }: { value: number; onChange: (v: number
   );
 }
 
-/* ─────────────────────────  Opret-opslag  ───────────────────────── */
+/* ───────────────────────── Opret-opslag ───────────────────────── */
 function OpretOpslagWeb({
   visible,
   onClose,
@@ -248,7 +246,7 @@ function OpretOpslagWeb({
   );
 }
 
-/* ─────────────────────────  Detalje-modal  ───────────────────────── */
+/* ───────────────────────── Detalje-modal ───────────────────────── */
 function OpslagDetaljeWeb({
   visible,
   opslag,
@@ -293,30 +291,14 @@ function OpslagDetaljeWeb({
   );
 }
 
-/* ─────────────────────────  Skærm  ───────────────────────── */
+/* ───────────────────────── Skærm ───────────────────────── */
 export default function NabolagWeb() {
-  // 1) Sikr scroll + klik; 2) SKJUL layout-footeren (indtil den fjernes i layoutet)
+  // Sikr at intet globalt blokerer scroll/pointer events (enkelt og sikkert)
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.style.overflow = "auto";
       document.body.style.overflow = "auto";
       document.body.style.pointerEvents = "auto";
-      const root = (document.getElementById("__next") || document.body) as HTMLElement;
-      root.style.pointerEvents = "auto";
-
-      // Skjul footer fra layoutet (finder div'en via dens indhold)
-      const hideFooter = () => {
-        const nodes = Array.from(document.querySelectorAll("div"));
-        const footer = nodes.find((n) => {
-          const t = (n.textContent || "").toLowerCase();
-          return t.includes("©") && t.includes("liguster") && (t.includes("log ind") || t.includes("nabolag"));
-        }) as HTMLElement | undefined;
-        if (footer) footer.style.display = "none";
-      };
-      hideFooter();
-      const mo = new MutationObserver(hideFooter);
-      mo.observe(document.body, { childList: true, subtree: true });
-      return () => mo.disconnect();
     }
   }, []);
 
@@ -345,11 +327,10 @@ export default function NabolagWeb() {
   const rawW = (boardW - GRID.padX * 2 - (isGrid ? GRID.gap * (cols - 1) : 0)) / (isGrid ? cols : 1);
   const cardW = Math.floor(rawW);
   const singleW = Math.floor(boardW - GRID.padX * 2);
-  const isNarrow = boardW < 720; // burger på < 720px
+  const narrow = boardW < 560;
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [selected, setSelected] = useState<Post | null>(null);
 
   const distanceText = useMemo(() => {
@@ -380,7 +361,11 @@ export default function NabolagWeb() {
             {!!item.kategori && <Chip>{item.kategori}</Chip>}
             <Text style={styles.title}>{item.overskrift}</Text>
             {!!item.omraade && <Text style={styles.place}>{item.omraade}</Text>}
-            {!!item.text && <Text numberOfLines={1} ellipsizeMode="tail" style={styles.teaser}>{item.text}</Text>}
+            {!!item.text && (
+              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.teaser}>
+                {item.text}
+              </Text>
+            )}
             {showD ? <Text style={styles.distance}>{km(d)} væk</Text> : null}
           </View>
         </View>
@@ -390,30 +375,6 @@ export default function NabolagWeb() {
 
   return (
     <View style={styles.page}>
-      {/* Topbar med burger kun på mobil-web */}
-      {isNarrow && (
-        <View style={styles.mobileTopbar}>
-          <Text style={styles.topbarBrand}>Liguster</Text>
-          <TouchableOpacity onPress={() => setMenuOpen((v) => !v)} style={styles.burgerBtn} accessibilityRole="button" accessibilityLabel="Åbn menu">
-            <Text style={styles.burgerIcon}>☰</Text>
-          </TouchableOpacity>
-          {menuOpen && (
-            <View style={styles.burgerMenu}>
-              <Link href="/(protected)/Nabolag" style={styles.menuItem} onPress={() => setMenuOpen(false)}>Nabolag</Link>
-              <Link href="/(protected)/ForeningerScreen" style={styles.menuItem} onPress={() => setMenuOpen(false)}>Forening</Link>
-              <Link href="/(protected)/Beskeder" style={styles.menuItem} onPress={() => setMenuOpen(false)}>Beskeder</Link>
-              <TouchableOpacity
-                onPress={async () => { await supabase.auth.signOut(); router.replace("/LoginScreen"); }}
-                style={[styles.menuItemBtn]}
-              >
-                <Text style={styles.menuItemBtnText}>Log ud</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* “Board” holder max bredde – vinduet scroller frit */}
       <View style={[styles.board, { width: boardW }]}>
         <View style={styles.header}>
           <Text style={styles.h1}>Nabolag</Text>
@@ -422,16 +383,16 @@ export default function NabolagWeb() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.filters, (boardW < 560) && { flexDirection: "column", gap: 10 }]}>
+        <View style={[styles.filters, narrow && { flexDirection: "column", gap: 10 }]}>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={[styles.search, (boardW < 560) && { width: "100%" }]}
+            style={[styles.search, narrow && { width: "100%" }]}
             placeholder="Søg i opslag…"
             placeholderTextColor="#6b7280"
             returnKeyType="search"
           />
-          <View style={[styles.filterRight, (boardW < 560) && { width: "100%", justifyContent: "space-between" }]}>
+          <View style={[styles.filterRight, narrow && { width: "100%", justifyContent: "space-between" }]}>
             <KategoriPicker value={kategoriFilter} onChange={setKategoriFilter} />
             <RadiusPicker value={radius} onChange={handleRadiusChange} />
           </View>
@@ -446,7 +407,7 @@ export default function NabolagWeb() {
             style={{ width: "100%" }}
             contentContainerStyle={{
               paddingHorizontal: GRID.padX,
-              paddingBottom: 56,
+              paddingBottom: 56, // lidt luft nederst
               alignItems: "center",
               alignSelf: "center",
               maxWidth: boardW,
@@ -455,7 +416,7 @@ export default function NabolagWeb() {
             columnWrapperStyle={isGrid ? { gap: GRID.gap } : undefined}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
-            // Vinduet scroller (ikke FlatList)
+            // Vinduet scroller – ikke FlatList
             scrollEnabled={false}
             removeClippedSubviews={false}
             showsVerticalScrollIndicator={false}
@@ -482,70 +443,18 @@ export default function NabolagWeb() {
   );
 }
 
-/* ─────────────────────────  Styles  ───────────────────────── */
+/* ───────────────────────── Styles ───────────────────────── */
 const styles = StyleSheet.create({
   page: {
     flex: 1,
     width: "100%",
     backgroundColor: THEME.pageBg,
     alignItems: "center",
-    paddingTop: 12,
-    paddingBottom: 18,
+    paddingVertical: 18,
   },
-
-  /* Mobil topbar + burger */
-  mobileTopbar: {
-    width: "100%",
-    maxWidth: GRID.boardMaxW,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: GRID.padX,
-    paddingVertical: 10,
-    marginBottom: 6,
-  },
-  topbarBrand: { color: THEME.ink, fontSize: 18, fontWeight: "900" },
-  burgerBtn: {
-    height: 36,
-    minWidth: 36,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: THEME.line,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  burgerIcon: { color: THEME.ink, fontSize: 18, fontWeight: "900" },
-  burgerMenu: {
-    position: "absolute",
-    right: GRID.padX,
-    top: 48,
-    backgroundColor: "#0b1220",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    paddingVertical: 8,
-    width: 220,
-    ...SHADOW.soft,
-  },
-  menuItem: {
-    color: "#e2e8f0",
-    fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  } as any,
-  menuItemBtn: {
-    marginTop: 4,
-    marginHorizontal: 8,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-    alignItems: "center",
-  },
-  menuItemBtnText: { color: "#0b1220", fontWeight: "900" },
 
   board: { backgroundColor: THEME.boardBg, borderRadius: RADII.xl, ...SHADOW.soft },
+
   header: {
     height: 68,
     paddingHorizontal: GRID.padX,
@@ -622,7 +531,7 @@ const styles = StyleSheet.create({
   teaser: { fontSize: 13, color: "#475569", marginTop: 6 },
   distance: { fontSize: 11, color: "#6b7280", marginTop: 6 },
 
-  // Modal/inputs
+  // Modaler / inputs
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", padding: 18 },
   modalCard: { backgroundColor: "#fff", borderRadius: RADII.xl, borderWidth: 1, borderColor: "#eef1f4", padding: 18, width: 420 },
   modalTitle: { fontSize: 18, fontWeight: "900", color: "#111827", marginBottom: 12 },
