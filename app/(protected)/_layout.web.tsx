@@ -1,13 +1,12 @@
-// app/(protected)/_layout.web.tsx
 import { Slot } from "expo-router";
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import WebHeader from "../../components/WebHeader";
+import WebHeader from "../components/WebHeader";
 
 export default function ProtectedWebLayout() {
   return (
     <View style={styles.page}>
-      {/* Global CSS for responsive header (no JS needed) */}
+      {/* Global CSS til mobile/desktop toggle */}
       <style>{`
         .only-mobile { display: none; }
         .only-desktop { display: flex; }
