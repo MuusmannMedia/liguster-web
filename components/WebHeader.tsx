@@ -1,111 +1,157 @@
 // app/components/WebHeader.tsx
-import { Link, usePathname } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { Link, router, usePathname } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-    Image,
-    Pressable,
     StyleSheet,
     Text,
+    TouchableOpacity,
+    View,
     useWindowDimensions,
-    View
 } from "react-native";
+import { useSession } from "../hooks/useSession";
+import { supabase } from "../utils/supabase";
 
-const NAV = [
-  { href: "/Nabolag/", label: "Nabolag" },
-  { href: "/forening/", label: "Forening" },
-  { href: "/Beskeder/", label: "Beskeder" },
-];
+const COLORS = {
+  bg: "#0b1220",
+  border: "#1e293b",
+  text: "#e2e8f0",
+  dim: "#cbd5e1",
+  btnBorder: "#334155",
+};
 
 export default function WebHeader() {
-  const { width } = useWindowDimensions();
+  const { session, loading } = useSession();
   const pathname = usePathname();
+  const isAuthed = !!session;
+
+  const { width } = useWindowDimensions();
+  const isMobile = useMemo(() => width < 720, [width]);
+
   const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [pathname]); // luk menu ved navigation
 
-  // “Mobil” = under 768 px (kun her vises burgeren)
-  const isMobile = useMemo(() => width < 768, [width]);
-
-  // Luk menuen når man skifter side
-  React.useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      router.replace("/LoginScreen");
+    }
+  };
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.inner}>
-        <Link href="/Nabolag/" asChild>
-          <Pressable style={styles.brand}>
-            <Image
-              source={
-                // fra app/components -> ../../assets/images/...
-                require("../../assets/images/Liguster-logo-website-clean.png")
+    <View style={styles.nav}>
+      {/* Brand / logo */}
+      <TouchableOpacity
+        onPress={() => router.push(isAuthed ? "/(protected)/Nabolag" : "/")}
+      >
+        <View style={styles.brandWrap}>
+          {/* web-img så vi kan bruge public-asset + fallback-case */}
+          <img
+            src="/liguster-logo-website-clean.png"
+            alt="Liguster"
+            style={{ height: 28, display: "block" }}
+            onError={(e) => {
+              const el = e.currentTarget as HTMLImageElement;
+              if (!el.dataset.triedFallback) {
+                el.dataset.triedFallback = "1";
+                el.src = "/Liguster-logo-website-clean.png";
               }
-              resizeMode="contain"
-              style={styles.logo}
-            />
-            <Text style={styles.wordmark}>LIGUSTER</Text>
-          </Pressable>
-        </Link>
+            }}
+          />
+        </View>
+      </TouchableOpacity>
 
-        {/* Desktop-nav (ingen burger) */}
-        {!isMobile && (
-          <View style={styles.nav}>
-            {NAV.map((item) => {
-              const active =
-                pathname?.toLowerCase().startsWith(item.href.toLowerCase());
-              return (
-                <Link key={item.href} href={item.href} asChild>
-                  <Pressable style={[styles.navItem, active && styles.active]}>
-                    <Text style={[styles.navText, active && styles.navTextActive]}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
+      {/* Desktop-nav (vises kun når !isMobile) */}
+      {!isMobile && (
+        <View style={styles.right}>
+          {!loading &&
+            (isAuthed ? (
+              <>
+                <Link href="/(protected)/Nabolag" style={styles.link}>
+                  Nabolag
                 </Link>
-              );
-            })}
-            <Link href="/LoginScreen/" asChild>
-              <Pressable style={styles.logoutBtn}>
-                <Text style={styles.logoutText}>Log ud</Text>
-              </Pressable>
-            </Link>
-          </View>
-        )}
+                <Link href="/(protected)/ForeningerScreen" style={styles.link}>
+                  Forening
+                </Link>
+                <Link href="/(protected)/Beskeder" style={styles.link}>
+                  Beskeder
+                </Link>
+                <TouchableOpacity onPress={signOut} style={styles.cta}>
+                  <Text style={styles.ctaTxt}>Log ud</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                onPress={() => router.push("/LoginScreen")}
+                style={styles.cta}
+              >
+                <Text style={styles.ctaTxt}>Log ind</Text>
+              </TouchableOpacity>
+            ))}
+        </View>
+      )}
 
-        {/* Mobil: burger */}
-        {isMobile && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Åbn menu"
+      {/* Mobil: burger + dropdown (vises kun når isMobile) */}
+      {isMobile && (
+        <View style={{ position: "relative" }}>
+          <TouchableOpacity
             onPress={() => setOpen((v) => !v)}
             style={styles.burger}
+            accessibilityRole="button"
+            accessibilityLabel="Åbn menu"
           >
-            <View style={styles.bar} />
-            <View style={styles.bar} />
-            <View style={styles.bar} />
-          </Pressable>
-        )}
-      </View>
+            <Text style={styles.burgerIcon}>☰</Text>
+          </TouchableOpacity>
 
-      {/* Mobil dropdown */}
-      {isMobile && open && (
-        <View style={styles.mobileMenu}>
-          {NAV.map((item) => {
-            const active =
-              pathname?.toLowerCase().startsWith(item.href.toLowerCase());
-            return (
-              <Link key={item.href} href={item.href} asChild>
-                <Pressable style={styles.mobileItem}>
-                  <Text style={[styles.mobileText, active && styles.navTextActive]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              </Link>
-            );
-          })}
-          <Link href="/LoginScreen/" asChild>
-            <Pressable style={[styles.mobileItem, { marginTop: 4 }]}>
-              <Text style={styles.mobileText}>Log ud</Text>
-            </Pressable>
-          </Link>
+          {open && (
+            <View style={styles.menu}>
+              {!loading &&
+                (isAuthed ? (
+                  <>
+                    <Link
+                      href="/(protected)/Nabolag"
+                      style={styles.menuItem}
+                      onPress={() => setOpen(false)}
+                    >
+                      Nabolag
+                    </Link>
+                    <Link
+                      href="/(protected)/ForeningerScreen"
+                      style={styles.menuItem}
+                      onPress={() => setOpen(false)}
+                    >
+                      Forening
+                    </Link>
+                    <Link
+                      href="/(protected)/Beskeder"
+                      style={styles.menuItem}
+                      onPress={() => setOpen(false)}
+                    >
+                      Beskeder
+                    </Link>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setOpen(false);
+                        signOut();
+                      }}
+                      style={styles.logout}
+                    >
+                      <Text style={styles.logoutTxt}>Log ud</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setOpen(false);
+                      router.push("/LoginScreen");
+                    }}
+                    style={styles.logout}
+                  >
+                    <Text style={styles.logoutTxt}>Log ind</Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -113,74 +159,72 @@ export default function WebHeader() {
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    backgroundColor: "#0F2437",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  inner: {
-    maxWidth: 1100,
-    width: "100%",
-    alignSelf: "center",
+  nav: {
+    height: 64,
+    backgroundColor: COLORS.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    zIndex: 100,
   },
-  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logo: { width: 28, height: 28 },
-  wordmark: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: 2,
+  brandWrap: { height: 28, justifyContent: "center" },
+
+  right: { flexDirection: "row", alignItems: "center", gap: 16 },
+  link: {
+    color: COLORS.dim,
+    fontSize: 14,
+    textDecorationLine: "none" as const,
   },
-  nav: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  navItem: {
-    paddingHorizontal: 10,
+
+  cta: {
     paddingVertical: 8,
-    borderRadius: 8,
-  },
-  active: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  navText: { color: "white", fontSize: 14, fontWeight: "600" },
-  navTextActive: { color: "white" },
-  logoutBtn: {
-    marginLeft: 8,
-    backgroundColor: "white",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.btnBorder,
     borderRadius: 10,
   },
-  logoutText: { color: "#0F2437", fontWeight: "700" },
+  ctaTxt: { color: COLORS.text, fontWeight: "700" },
 
   burger: {
-    width: 34,
-    height: 34,
+    borderWidth: 1,
+    borderColor: COLORS.btnBorder,
     borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#0f172a",
   },
-  bar: { width: 18, height: 2, backgroundColor: "white", borderRadius: 1 },
+  burgerIcon: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
 
-  mobileMenu: {
-    backgroundColor: "#0F2437",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.12)",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+  menu: {
+    position: "absolute",
+    right: 0,
+    top: 44,
+    minWidth: 220,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 8,
+    zIndex: 999,
+    boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
+  } as any,
+  menuItem: {
+    color: COLORS.text,
+    fontSize: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    textDecorationLine: "none" as const,
   },
-  mobileItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+  logout: {
+    marginTop: 6,
+    marginHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    alignItems: "center",
   },
-  mobileText: { color: "white", fontSize: 16, fontWeight: "600" },
+  logoutTxt: { color: "#0b1220", fontWeight: "900" },
 });
