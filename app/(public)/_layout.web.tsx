@@ -1,5 +1,6 @@
-import { router, Slot } from "expo-router";
-import React, { useState } from "react";
+// app/(public)/_layout.web.tsx
+import { Slot, router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const COLORS = {
@@ -10,55 +11,64 @@ const COLORS = {
   btnBorder: "#334155",
 };
 
+function useIsMobile(breakpoint = 720) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < breakpoint);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function PublicWebLayout() {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
 
   return (
     <View style={styles.page}>
-      {/* Global CSS for responsivitet */}
-      <style>{`
-        .only-mobile { display: none; }
-        .only-desktop { display: flex; }
-        @media (max-width: 719px) {
-          .only-mobile { display: block; }
-          .only-desktop { display: none; }
-        }
-      `}</style>
-
-      {/* Header */}
       <View style={styles.nav}>
         <TouchableOpacity onPress={() => router.push("/")}>
           <img
             src="/liguster-logo-website-clean.png"
             alt="Liguster"
             style={{ height: 28, display: "block" }}
+            onError={(e) => {
+              const el = e.currentTarget as HTMLImageElement;
+              if (!el.dataset.triedFallback) {
+                el.dataset.triedFallback = "1";
+                el.src = "/Liguster-logo-website-clean.png";
+              }
+            }}
           />
         </TouchableOpacity>
 
-        {/* Desktop links */}
-        <View className="only-desktop" style={styles.right}>
-          <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
-            <Text style={styles.ctaTxt}>Log ind</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Mobile burger */}
-        <View className="only-mobile" style={{ position: "relative" }}>
-          <TouchableOpacity
-            onPress={() => setOpen((v) => !v)}
-            style={styles.burger}
-          >
-            <Text style={styles.burgerIcon}>☰</Text>
-          </TouchableOpacity>
-
-          {open && (
-            <View style={styles.menu}>
-              <TouchableOpacity onPress={() => { setOpen(false); router.push("/LoginScreen"); }} style={styles.logout}>
-                <Text style={styles.logoutTxt}>Log ind</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+        {!isMobile ? (
+          // Desktop: NO burger
+          <View style={styles.right}>
+            <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
+              <Text style={styles.ctaTxt}>Log ind</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // Mobile: burger
+          <View style={{ position: "relative" }}>
+            <TouchableOpacity onPress={() => setOpen(v => !v)} style={styles.burger}>
+              <Text style={styles.burgerIcon}>☰</Text>
+            </TouchableOpacity>
+            {open && (
+              <View style={styles.menu}>
+                <TouchableOpacity
+                  onPress={() => { setOpen(false); router.push("/LoginScreen"); }}
+                  style={styles.logout}
+                >
+                  <Text style={styles.logoutTxt}>Log ind</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       <Slot />
