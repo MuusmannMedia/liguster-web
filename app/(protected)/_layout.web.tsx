@@ -2,11 +2,21 @@
 import { Slot } from "expo-router";
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import WebHeader from "../components/WebHeader";
+import WebHeader from "../../components/WebHeader";
 
 export default function ProtectedWebLayout() {
   return (
     <View style={styles.page}>
+      {/* Global CSS for responsive header (no JS needed) */}
+      <style>{`
+        .only-mobile { display: none; }
+        .only-desktop { display: flex; }
+        @media (max-width: 719px) {
+          .only-mobile { display: block; }
+          .only-desktop { display: none; }
+        }
+      `}</style>
+
       <WebHeader />
       <Slot />
     </View>
