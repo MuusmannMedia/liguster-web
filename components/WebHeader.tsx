@@ -1,9 +1,8 @@
-// app/components/WebHeader.tsx
 import { Link, router } from "expo-router";
 import React, { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-import { useSession } from "../hooks/useSession"; // tilpas hvis din hook ligger andetsteds
-import { supabase } from "../utils/supabase"; // tilpas hvis din utils-sti er anderledes
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSession } from "../hooks/useSession"; // tilpas hvis din sti er anderledes
+import { supabase } from "../utils/supabase"; // tilpas hvis din sti er anderledes
 
 const COLORS = {
   bg: "#0b1220",
@@ -16,8 +15,6 @@ const COLORS = {
 export default function WebHeader() {
   const { session, loading } = useSession();
   const isAuthed = !!session;
-  const { width } = useWindowDimensions();
-  const isMobile = width < 720;
   const [open, setOpen] = useState(false);
 
   const signOut = async () => {
@@ -27,72 +24,75 @@ export default function WebHeader() {
   return (
     <View style={styles.nav}>
       <TouchableOpacity onPress={() => router.push(isAuthed ? "/(protected)/Nabolag" : "/")}>
-        {/* Logo-only brand (ingen tekst) */}
         <View style={styles.brandWrap}>
+          {/* Try lower-case file first; fallback to capitalized if 404 */}
           <img
             src="/liguster-logo-website-clean.png"
             alt="Liguster"
             style={{ height: 28, display: "block" }}
+            onError={(e) => {
+              const el = e.currentTarget as HTMLImageElement;
+              if (!el.dataset.triedFallback) {
+                el.dataset.triedFallback = "1";
+                el.src = "/Liguster-logo-website-clean.png";
+              }
+            }}
           />
         </View>
       </TouchableOpacity>
 
       {/* Desktop links */}
-      {!isMobile && (
-        <View style={styles.right}>
-          {!loading && (
-            isAuthed ? (
-              <>
-                <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
-                <Link href="/(protected)/ForeningerScreen" style={styles.link}>Forening</Link>
-                <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
-                <TouchableOpacity onPress={signOut} style={styles.cta}>
-                  <Text style={styles.ctaTxt}>Log ud</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
-                <Text style={styles.ctaTxt}>Log ind</Text>
+      <View className="only-desktop" style={styles.right}>
+        {!loading && (
+          isAuthed ? (
+            <>
+              <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
+              <Link href="/(protected)/ForeningerScreen" style={styles.link}>Forening</Link>
+              <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
+              <TouchableOpacity onPress={signOut} style={styles.cta}>
+                <Text style={styles.ctaTxt}>Log ud</Text>
               </TouchableOpacity>
-            )
-          )}
-        </View>
-      )}
+            </>
+          ) : (
+            <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
+              <Text style={styles.ctaTxt}>Log ind</Text>
+            </TouchableOpacity>
+          )
+        )}
+      </View>
 
       {/* Mobile burger */}
-      {isMobile && (
-        <View style={{ position: "relative" }}>
-          <TouchableOpacity
-            onPress={() => setOpen(v => !v)}
-            style={styles.burger}
-            accessibilityRole="button"
-            accessibilityLabel="Åbn menu"
-          >
-            <Text style={styles.burgerIcon}>☰</Text>
-          </TouchableOpacity>
+      <View className="only-mobile" style={{ position: "relative" }}>
+        <TouchableOpacity
+          onPress={() => setOpen((v) => !v)}
+          style={styles.burger}
+          accessibilityRole="button"
+          accessibilityLabel="Åbn menu"
+        >
+          <Text style={styles.burgerIcon}>☰</Text>
+        </TouchableOpacity>
 
-          {open && (
-            <View style={styles.menu}>
-              {!loading && (
-                isAuthed ? (
-                  <>
-                    <Link href="/(protected)/Nabolag" style={styles.menuItem} onPress={() => setOpen(false)}>Nabolag</Link>
-                    <Link href="/(protected)/ForeningerScreen" style={styles.menuItem} onPress={() => setOpen(false)}>Forening</Link>
-                    <Link href="/(protected)/Beskeder" style={styles.menuItem} onPress={() => setOpen(false)}>Beskeder</Link>
-                    <TouchableOpacity onPress={signOut} style={styles.logout}>
-                      <Text style={styles.logoutTxt}>Log ud</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <TouchableOpacity onPress={() => { setOpen(false); router.push("/LoginScreen"); }} style={styles.logout}>
-                    <Text style={styles.logoutTxt}>Log ind</Text>
+        {open && (
+          <View style={styles.menu}>
+            {!loading && (
+              isAuthed ? (
+                <>
+                  <Link href="/(protected)/Nabolag" style={styles.menuItem} onPress={() => setOpen(false)}>Nabolag</Link>
+                  <Link href="/(protected)/ForeningerScreen" style={styles.menuItem} onPress={() => setOpen(false)}>Forening</Link>
+                  <Link href="/(protected)/Beskeder" style={styles.menuItem} onPress={() => setOpen(false)}>Beskeder</Link>
+                  <TouchableOpacity onPress={() => { setOpen(false); signOut(); }} style={styles.logout}>
+                    <Text style={styles.logoutTxt}>Log ud</Text>
                   </TouchableOpacity>
-                )
-              )}
-            </View>
-          )}
-        </View>
-      )}
+                </>
+              ) : (
+                <TouchableOpacity onPress={() => { setOpen(false); router.push("/LoginScreen"); }} style={styles.logout}>
+                  <Text style={styles.logoutTxt}>Log ind</Text>
+                </TouchableOpacity>
+              )
+            )}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -107,6 +107,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    zIndex: 100, // så dropdown kan ligge øverst
   },
   brandWrap: { height: 28, justifyContent: "center" },
 
@@ -125,10 +126,11 @@ const styles = StyleSheet.create({
   },
   burgerIcon: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
   menu: {
-    position: "absolute", right: 0, top: 40, minWidth: 220,
+    position: "absolute", right: 0, top: 44, minWidth: 220,
     backgroundColor: COLORS.bg, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 12, paddingVertical: 8, zIndex: 20,
-  },
+    borderRadius: 12, paddingVertical: 8, zIndex: 999,
+    boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
+  } as any,
   menuItem: {
     color: COLORS.text, fontSize: 14,
     paddingVertical: 10, paddingHorizontal: 12,

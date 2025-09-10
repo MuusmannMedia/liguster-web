@@ -7,6 +7,16 @@ import WebHeader from "../../components/WebHeader";
 export default function PublicWebLayout() {
   return (
     <View style={styles.page}>
+      {/* Global CSS for responsive header (no JS needed) */}
+      <style>{`
+        .only-mobile { display: none; }
+        .only-desktop { display: flex; }
+        @media (max-width: 719px) {
+          .only-mobile { display: block; }
+          .only-desktop { display: none; }
+        }
+      `}</style>
+
       <WebHeader />
       <Slot />
     </View>
