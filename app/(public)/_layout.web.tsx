@@ -18,6 +18,7 @@ export default function PublicWebLayout() {
           html, body, #root, #__next { height: auto !important; overflow: auto !important; }
           body { margin: 0; -webkit-overflow-scrolling: touch; background: #7C8996; }
           footer, .footer, #footer, .bottom-nav, #bottom-nav, [data-footer], [role="contentinfo"] { display:none !important; }
+          .brandText, [data-brand-text] { display:none !important; } /* defensiv fjernelse af evt. tekst-logo */
         `}</style>
       </Head>
 
@@ -27,24 +28,23 @@ export default function PublicWebLayout() {
             source={{ uri: "/Liguster-logo-website-clean.png" }}
             style={styles.logo}
             resizeMode="contain"
+            accessibilityIgnoresInvertColors
           />
         </Link>
 
         <View style={styles.right}>
           {!session ? (
-            <Link href="/LoginScreen" style={styles.link}>Log ind</Link>
+            <Link href="/LoginScreen" style={styles.link as any}>Log ind</Link>
           ) : (
             <>
-              {/* Desktop: vis sektioner */}
               {!isMobile && (
                 <>
-                  <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
-                  <Link href="/(protected)/ForeningerScreen" style={styles.link}>Forening</Link>
-                  <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
+                  <Link href="/(protected)/Nabolag" style={styles.link as any}>Nabolag</Link>
+                  <Link href="/(protected)/ForeningerScreen" style={styles.link as any}>Forening</Link>
+                  <Link href="/(protected)/Beskeder" style={styles.link as any}>Beskeder</Link>
                 </>
               )}
-              {/* CTA til app */}
-              <Link href="/(protected)/Nabolag" style={styles.ctaLink}>Gå til app</Link>
+              <Link href="/(protected)/Nabolag" style={styles.ctaLink as any}>Gå til app</Link>
             </>
           )}
         </View>
@@ -71,8 +71,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  brandWrap: { flexDirection: "row", alignItems: "center", gap: 10 },
-  logo: { height: 28, width: 120 },
+  brandWrap: { flexDirection: "row", alignItems: "center" },
+  logo: { height: 28, width: 140 },
 
   right: { flexDirection: "row", alignItems: "center", gap: 16 },
   link: { color: "#cbd5e1", fontSize: 14, textDecorationLine: "none" },
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     fontWeight: "800",
     textDecorationLine: "none",
-  } as any,
+  },
 
   content: { flex: 1, minHeight: 0 },
 });
