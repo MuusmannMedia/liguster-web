@@ -1,8 +1,8 @@
 import { Link, router } from "expo-router";
 import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useSession } from "../hooks/useSession"; // tilpas hvis din sti er anderledes
-import { supabase } from "../utils/supabase"; // tilpas hvis din sti er anderledes
+import { useSession } from "../hooks/useSession"; // justér hvis din sti er anderledes
+import { supabase } from "../utils/supabase"; // justér hvis din sti er anderledes
 
 const COLORS = {
   bg: "#0b1220",
@@ -17,15 +17,18 @@ export default function WebHeader() {
   const isAuthed = !!session;
   const [open, setOpen] = useState(false);
 
+  const goHome = () => router.push(isAuthed ? "/(protected)/Nabolag" : "/");
   const signOut = async () => {
-    try { await supabase.auth.signOut(); } finally { router.replace("/LoginScreen"); }
+    try { await supabase.auth.signOut(); }
+    finally { router.replace("/LoginScreen"); }
   };
 
   return (
     <View style={styles.nav}>
-      <TouchableOpacity onPress={() => router.push(isAuthed ? "/(protected)/Nabolag" : "/")}>
+      {/* Brand / logo */}
+      <TouchableOpacity onPress={goHome}>
         <View style={styles.brandWrap}>
-          {/* Try lower-case file first; fallback to capitalized if 404 */}
+          {/* Prøv lowercase filnavn først, fald tilbage til stort L hvis 404 */}
           <img
             src="/liguster-logo-website-clean.png"
             alt="Liguster"
@@ -41,7 +44,7 @@ export default function WebHeader() {
         </View>
       </TouchableOpacity>
 
-      {/* Desktop links */}
+      {/* DESKTOP: links (ingen burger) */}
       <View className="only-desktop" style={styles.right}>
         {!loading && (
           isAuthed ? (
@@ -61,7 +64,7 @@ export default function WebHeader() {
         )}
       </View>
 
-      {/* Mobile burger */}
+      {/* MOBIL: burger + dropdown */}
       <View className="only-mobile" style={{ position: "relative" }}>
         <TouchableOpacity
           onPress={() => setOpen((v) => !v)}
@@ -107,7 +110,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    zIndex: 100, // så dropdown kan ligge øverst
+    zIndex: 100,
   },
   brandWrap: { height: 28, justifyContent: "center" },
 
@@ -125,6 +128,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6, paddingHorizontal: 10, backgroundColor: "#0f172a",
   },
   burgerIcon: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
+
   menu: {
     position: "absolute", right: 0, top: 44, minWidth: 220,
     backgroundColor: COLORS.bg, borderWidth: 1, borderColor: COLORS.border,
