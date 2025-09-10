@@ -12,17 +12,7 @@ export default function ProtectedWebLayout() {
     </View>
   );
 }
-const styles = StyleSheet.create({ page: { flex: 1, backgroundColor: "#7C8996" } });
 
-// app/(public)/_layout.web.tsx
-import React from "react";
-
-export default function PublicWebLayout() {
-  return (
-    <View style={styles.page}>
-      <WebHeader />
-      <Slot />
-    </View>
-  );
-}
-const styles = StyleSheet.create({ page: { flex: 1, backgroundColor: "#7C8996" } });
+const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: "#7C8996" },
+});
