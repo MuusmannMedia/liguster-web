@@ -1,114 +1,89 @@
 // app/(public)/_layout.web.tsx
-import { Slot, router } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Slot } from "expo-router";
+import React, { useState } from "react";
 
-const COLORS = {
-  bg: "#0b1220",
-  border: "#1e293b",
-  text: "#e2e8f0",
-  dim: "#cbd5e1",
-  btnBorder: "#334155",
-};
-
-function useIsMobile(breakpoint = 720) {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const update = () => setIsMobile(window.innerWidth < breakpoint);
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [breakpoint]);
-  return isMobile;
-}
-
+/**
+ * Web-only layout for public routes.
+ * Same responsive header behavior as protected, but with "Log ind".
+ */
 export default function PublicWebLayout() {
-  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
 
   return (
-    <View style={styles.page}>
-      <View style={styles.nav}>
-        <TouchableOpacity onPress={() => router.push("/")}>
+    <div style={styles.page}>
+      <style>{css}</style>
+
+      <nav className="nav">
+        <a className="brand" href="/">
           <img
             src="/liguster-logo-website-clean.png"
             alt="Liguster"
-            style={{ height: 28, display: "block" }}
+            height={28}
             onError={(e) => {
               const el = e.currentTarget as HTMLImageElement;
-              if (!el.dataset.triedFallback) {
-                el.dataset.triedFallback = "1";
+              if (!el.dataset.triedfallback) {
+                el.dataset.triedfallback = "1";
                 el.src = "/Liguster-logo-website-clean.png";
               }
             }}
           />
-        </TouchableOpacity>
+        </a>
 
-        {!isMobile ? (
-          // Desktop: NO burger
-          <View style={styles.right}>
-            <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
-              <Text style={styles.ctaTxt}>Log ind</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // Mobile: burger
-          <View style={{ position: "relative" }}>
-            <TouchableOpacity onPress={() => setOpen(v => !v)} style={styles.burger}>
-              <Text style={styles.burgerIcon}>☰</Text>
-            </TouchableOpacity>
-            {open && (
-              <View style={styles.menu}>
-                <TouchableOpacity
-                  onPress={() => { setOpen(false); router.push("/LoginScreen"); }}
-                  style={styles.logout}
-                >
-                  <Text style={styles.logoutTxt}>Log ind</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
+        {/* Desktop: show "Log ind" */}
+        <div className="desktop-only right">
+          <a className="btn" href="/LoginScreen">Log ind</a>
+        </div>
+
+        {/* Mobile: burger -> only "Log ind" */}
+        <div className="mobile-only burger-wrap">
+          <button className="burger" aria-label="Åbn menu" onClick={() => setOpen(v => !v)}>
+            ☰
+          </button>
+
+          {open && (
+            <div className="menu" onClick={() => setOpen(false)}>
+              <a className="logout" href="/LoginScreen">Log ind</a>
+            </div>
+          )}
+        </div>
+      </nav>
 
       <Slot />
-    </View>
+    </div>
   );
 }
 
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#7C8996" },
-  nav: {
-    height: 64,
-    backgroundColor: COLORS.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    zIndex: 100,
-  },
-  right: { flexDirection: "row", alignItems: "center", gap: 16 },
-  cta: {
-    paddingVertical: 8, paddingHorizontal: 12,
-    borderWidth: 1, borderColor: COLORS.btnBorder, borderRadius: 10,
-  },
-  ctaTxt: { color: COLORS.text, fontWeight: "700" },
-  burger: {
-    borderWidth: 1, borderColor: COLORS.btnBorder, borderRadius: 10,
-    paddingVertical: 6, paddingHorizontal: 10, backgroundColor: "#0f172a",
-  },
-  burgerIcon: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
-  menu: {
-    position: "absolute", right: 0, top: 44, minWidth: 220,
-    backgroundColor: COLORS.bg, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 12, paddingVertical: 8, zIndex: 999,
-    boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
-  } as any,
-  logout: {
-    marginTop: 6, marginHorizontal: 8, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: "#fff", alignItems: "center",
-  },
-  logoutTxt: { color: "#0b1220", fontWeight: "900" },
-});
+const css = `
+  .nav {
+    height: 64px;
+    background:#0b1220;
+    border-bottom:1px solid #1e293b;
+    padding:0 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:sticky; top:0; z-index:100;
+  }
+  .brand { display:flex; align-items:center; gap:10px; text-decoration:none; }
+  .right { display:flex; align-items:center; gap:16px; }
+  .btn { padding:8px 12px; border:1px solid #334155; border-radius:10px; color:#e2e8f0; text-decoration:none; font-weight:700; }
+  .burger-wrap { position:relative; }
+  .burger { padding:6px 10px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; font-weight:900; }
+  .menu {
+    position:absolute; right:0; top:44px; min-width:220px;
+    background:#0b1220; border:1px solid #1e293b; border-radius:12px; padding:8px;
+    box-shadow:0 6px 16px rgba(0,0,0,.25);
+  }
+  .logout { display:block; margin:2px 8px; text-align:center; padding:10px 12px; border-radius:10px; background:#fff; color:#0b1220; font-weight:900; text-decoration:none; }
+
+  .desktop-only { display:flex; }
+  .mobile-only { display:none; }
+  @media (max-width: 719px) {
+    .desktop-only { display:none; }
+    .mobile-only { display:block; }
+  }
+`;
+
+const styles = {
+  page: { flex: 1, backgroundColor: "#7C8996", minHeight: "100vh" } as React.CSSProperties,
+};
