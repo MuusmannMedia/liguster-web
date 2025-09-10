@@ -1,95 +1,117 @@
-import { Link, router } from "expo-router";
-import React, { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useSession } from "../hooks/useSession"; // tilpas hvis din sti er anderledes
-import { supabase } from "../utils/supabase"; // tilpas hvis din sti er anderledes
+// app/components/WebHeader.tsx
+import { Link, usePathname, useRouter } from "expo-router";
+import Head from "expo-router/head";
+import React, { useEffect, useRef, useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
-const COLORS = {
-  bg: "#0b1220",
-  border: "#1e293b",
-  text: "#e2e8f0",
-  dim: "#cbd5e1",
-  btnBorder: "#334155",
-};
+// Brug det rene liguster-logo til headeren
+const LOGO = require("../assets/images/Liguster-logo-NEG.png");
+
+const LINKS = [
+  { href: "/Nabolag", label: "Nabolag" },
+  { href: "/Forening", label: "Forening" },
+  { href: "/Beskeder", label: "Beskeder" },
+];
 
 export default function WebHeader() {
-  const { session, loading } = useSession();
-  const isAuthed = !!session;
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
 
-  const signOut = async () => {
-    try { await supabase.auth.signOut(); } finally { router.replace("/LoginScreen"); }
-  };
+  // Luk dropdown når man klikker udenfor
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!open) return;
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Luk dropdown ved route-skift
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   return (
-    <View style={styles.nav}>
-      <TouchableOpacity onPress={() => router.push(isAuthed ? "/(protected)/Nabolag" : "/")}>
-        <View style={styles.brandWrap}>
-          {/* Try lower-case file first; fallback to capitalized if 404 */}
-          <img
-            src="/liguster-logo-website-clean.png"
-            alt="Liguster"
-            style={{ height: 28, display: "block" }}
-            onError={(e) => {
-              const el = e.currentTarget as HTMLImageElement;
-              if (!el.dataset.triedFallback) {
-                el.dataset.triedFallback = "1";
-                el.src = "/Liguster-logo-website-clean.png";
-              }
-            }}
-          />
-        </View>
-      </TouchableOpacity>
+    <View style={styles.wrap}>
+      {/* CSS der styrer hvornår burger/desktop vises */}
+      <Head>
+        <style>{`
+          .only-mobile { display: none; }
+          .only-desktop { display: flex; }
+          @media (max-width: 900px) {
+            .only-mobile { display: flex; }
+            .only-desktop { display: none; }
+          }
+          /* Lille reset til knap */
+          .icon-btn { background: #0b1220; border: 1px solid #253048; border-radius: 12px; padding: 8px; }
+          .icon-btn:hover { background:#0e1627; }
+        `}</style>
+      </Head>
 
-      {/* Desktop links */}
-      <View className="only-desktop" style={styles.right}>
-        {!loading && (
-          isAuthed ? (
-            <>
-              <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
-              <Link href="/(protected)/ForeningerScreen" style={styles.link}>Forening</Link>
-              <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
-              <TouchableOpacity onPress={signOut} style={styles.cta}>
-                <Text style={styles.ctaTxt}>Log ud</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
-              <Text style={styles.ctaTxt}>Log ind</Text>
-            </TouchableOpacity>
-          )
-        )}
+      {/* Venstre: logo (altid) */}
+      <Link href="/Nabolag" style={{ textDecoration: "none" }}>
+        <View style={styles.brand}>
+          <Image source={LOGO} resizeMode="contain" style={styles.logo} />
+        </View>
+      </Link>
+
+      {/* Højre: desktop-nav (ingen burger) */}
+      <View className="only-desktop" style={styles.desktopRight}>
+        <View style={styles.links}>
+          {LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              style={[
+                styles.link,
+                pathname?.startsWith(l.href) && styles.linkActive,
+              ]}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </View>
+        <Pressable onPress={() => router.push("/LoginScreen?logout=1")} style={styles.logoutBtn}>
+          <Text style={styles.logoutTxt}>Log ud</Text>
+        </Pressable>
       </View>
 
-      {/* Mobile burger */}
-      <View className="only-mobile" style={{ position: "relative" }}>
-        <TouchableOpacity
-          onPress={() => setOpen((v) => !v)}
-          style={styles.burger}
-          accessibilityRole="button"
-          accessibilityLabel="Åbn menu"
+      {/* Højre: mobil – KUN burger */}
+      <View className="only-mobile" style={styles.mobileRight}>
+        <button
+          ref={btnRef}
+          aria-label="Menu"
+          className="icon-btn"
+          onClick={() => setOpen((v) => !v)}
+          style={{ cursor: "pointer" }}
         >
-          <Text style={styles.burgerIcon}>☰</Text>
-        </TouchableOpacity>
+          {/* simpel burger-ikon */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="6" width="18" height="2" rx="1" fill="#d9e1ee" />
+            <rect x="3" y="11" width="18" height="2" rx="1" fill="#d9e1ee" />
+            <rect x="3" y="16" width="18" height="2" rx="1" fill="#d9e1ee" />
+          </svg>
+        </button>
 
         {open && (
-          <View style={styles.menu}>
-            {!loading && (
-              isAuthed ? (
-                <>
-                  <Link href="/(protected)/Nabolag" style={styles.menuItem} onPress={() => setOpen(false)}>Nabolag</Link>
-                  <Link href="/(protected)/ForeningerScreen" style={styles.menuItem} onPress={() => setOpen(false)}>Forening</Link>
-                  <Link href="/(protected)/Beskeder" style={styles.menuItem} onPress={() => setOpen(false)}>Beskeder</Link>
-                  <TouchableOpacity onPress={() => { setOpen(false); signOut(); }} style={styles.logout}>
-                    <Text style={styles.logoutTxt}>Log ud</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity onPress={() => { setOpen(false); router.push("/LoginScreen"); }} style={styles.logout}>
-                  <Text style={styles.logoutTxt}>Log ind</Text>
-                </TouchableOpacity>
-              )
-            )}
+          <View ref={menuRef as any} style={styles.dropdown}>
+            {LINKS.map((l) => (
+              <Link key={l.href} href={l.href} style={styles.ddItem}>
+                {l.label}
+              </Link>
+            ))}
+            <Pressable
+              onPress={() => router.push("/LoginScreen?logout=1")}
+              style={styles.ddLogout}
+            >
+              <Text style={styles.ddLogoutTxt}>Log ud</Text>
+            </Pressable>
           </View>
         )}
       </View>
@@ -98,47 +120,68 @@ export default function WebHeader() {
 }
 
 const styles = StyleSheet.create({
-  nav: {
+  wrap: {
     height: 64,
-    backgroundColor: COLORS.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
-    flexDirection: "row",
+    backgroundColor: "#0b1220",
+    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomWidth: 0,
+    paddingHorizontal: 16,
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
-    zIndex: 100, // så dropdown kan ligge øverst
   },
-  brandWrap: { height: 28, justifyContent: "center" },
-
-  right: { flexDirection: "row", alignItems: "center", gap: 16 },
-  link: { color: COLORS.dim, fontSize: 14, textDecorationLine: "none" as const },
-
-  cta: {
-    paddingVertical: 8, paddingHorizontal: 12,
-    borderWidth: 1, borderColor: COLORS.btnBorder, borderRadius: 10,
+  brand: { flexDirection: "row", alignItems: "center", gap: 8 },
+  logo: { width: 32, height: 32 },
+  desktopRight: { flexDirection: "row", alignItems: "center", gap: 12 },
+  links: { flexDirection: "row", gap: 18 },
+  link: {
+    color: "#c6d1e6",
+    fontWeight: "600",
+    fontSize: 14,
+    textDecorationLine: "none",
+    paddingVertical: 6,
   },
-  ctaTxt: { color: COLORS.text, fontWeight: "700" },
-
-  burger: {
-    borderWidth: 1, borderColor: COLORS.btnBorder, borderRadius: 10,
-    paddingVertical: 6, paddingHorizontal: 10, backgroundColor: "#0f172a",
+  linkActive: { color: "#ffffff" },
+  logoutBtn: {
+    backgroundColor: "#0f1628",
+    borderColor: "#253048",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginLeft: 8,
   },
-  burgerIcon: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
-  menu: {
-    position: "absolute", right: 0, top: 44, minWidth: 220,
-    backgroundColor: COLORS.bg, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: 12, paddingVertical: 8, zIndex: 999,
-    boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
-  } as any,
-  menuItem: {
-    color: COLORS.text, fontSize: 14,
-    paddingVertical: 10, paddingHorizontal: 12,
-    textDecorationLine: "none" as const,
+  logoutTxt: { color: "#dfe7f6", fontWeight: "700", fontSize: 12 },
+  mobileRight: { alignItems: "center", flexDirection: "row", gap: 8, position: "relative" },
+  dropdown: {
+    position: "absolute",
+    top: 52,
+    right: 0,
+    backgroundColor: "#0b1220",
+    borderColor: "#253048",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 10,
+    width: 220,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
   },
-  logout: {
-    marginTop: 6, marginHorizontal: 8, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: "#fff", alignItems: "center",
+  ddItem: {
+    color: "#c6d1e6",
+    fontSize: 16,
+    fontWeight: "600",
+    textDecorationLine: "none",
+    paddingVertical: 6,
   },
-  logoutTxt: { color: "#0b1220", fontWeight: "900" },
+  ddLogout: {
+    marginTop: 6,
+    backgroundColor: "#111827",
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  ddLogoutTxt: { color: "#ffffff", fontWeight: "800", fontSize: 16 },
 });
