@@ -2,7 +2,7 @@
 import { Slot } from "expo-router";
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import WebHeader from "../../components/WebHeader";
+import WebHeader from "../components/WebHeader";
 
 export default function PublicWebLayout() {
   return (
