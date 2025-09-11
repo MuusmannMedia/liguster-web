@@ -19,7 +19,6 @@ export default function LoginScreenWeb() {
   const [showPw, setShowPw]     = useState(false);
 
   useEffect(() => {
-    // Sikr at intet forhindrer scroll/klik
     document.documentElement.style.overflow = "auto";
     document.body.style.overflow = "auto";
     document.body.style.pointerEvents = "auto";
@@ -48,64 +47,74 @@ export default function LoginScreenWeb() {
   }, [email, password, router]);
 
   return (
-    <div style={styles.page}>
+    <div style={styles.pageOuter}>
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta httpEquiv="Cache-Control" content="no-store" />
         <title>Log ind • Liguster</title>
       </Head>
 
-      <form onSubmit={submit} style={styles.card}>
-        <h1 style={styles.title}>Log ind</h1>
+      {/* Global font to match the app (sans-serif UI stack) */}
+      <style>{`
+        :root, body, button, input, label, h1, a, div, span {
+          font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+      `}</style>
 
-        {err ? <div style={styles.error}>{err}</div> : null}
+      {/* This wrapper subtracts the 64px header so the card is dead-center */}
+      <div style={styles.page}>
+        <form onSubmit={submit} style={styles.card}>
+          <h1 style={styles.title}>Log ind</h1>
 
-        <label htmlFor="email" style={styles.label}>Email</label>
-        <input
-          id="email"
-          ref={emailRef}
-          type="email"
-          inputMode="email"
-          autoComplete="username"
-          placeholder="dig@email.dk"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={styles.input}
-        />
+          {err ? <div style={styles.error}>{err}</div> : null}
 
-        <label htmlFor="password" style={styles.label}>Password</label>
-
-        {/* Samme bredde som email: knappen ligger ovenpå til højre */}
-        <div style={styles.pwWrap}>
+          <label htmlFor="email" style={styles.label}>Email</label>
           <input
-            id="password"
-            ref={passRef}
-            type={showPw ? "text" : "password"}
-            autoComplete="current-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            // ekstra paddingRight så teksten ikke ligger under knappen
-            style={{ ...styles.input, paddingRight: styles.toggleSize.width + 10 }}
+            id="email"
+            ref={emailRef}
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="dig@email.dk"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={styles.input}
           />
-          <button
-            type="button"
-            onClick={() => setShowPw(s => !s)}
-            style={{ ...styles.togglePw, width: styles.toggleSize.width }}
-            aria-label={showPw ? "Skjul password" : "Vis password"}
-          >
-            {showPw ? "Skjul" : "Vis"}
+
+          <label htmlFor="password" style={styles.label}>Password</label>
+
+          {/* Samme bredde som email: knappen ligger ovenpå til højre */}
+          <div style={styles.pwWrap}>
+            <input
+              id="password"
+              ref={passRef}
+              type={showPw ? "text" : "password"}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              // ekstra paddingRight så teksten ikke ligger under knappen
+              style={{ ...styles.input, paddingRight: styles.toggleSize.width + 10 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw(s => !s)}
+              style={{ ...styles.togglePw, width: styles.toggleSize.width }}
+              aria-label={showPw ? "Skjul password" : "Vis password"}
+            >
+              {showPw ? "Skjul" : "Vis"}
+            </button>
+          </div>
+
+          <button type="submit" disabled={loading} style={styles.button}>
+            {loading ? "Logger ind…" : "LOG IND"}
           </button>
-        </div>
 
-        <button type="submit" disabled={loading} style={styles.button}>
-          {loading ? "Logger ind…" : "LOG IND"}
-        </button>
-
-        <div style={styles.footerRow}>
-          <Link href="/" style={styles.footerLink}>‹ Tilbage</Link>
-        </div>
-      </form>
+          <div style={styles.footerRow}>
+            <Link href="/" style={styles.footerLink}>‹ Tilbage</Link>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -131,14 +140,18 @@ const styles: Record<string, any> = {
   // størrelse på “Vis/Skjul”-knappen (bruges to steder)
   toggleSize: { width: 64 },
 
-  page: {
+  // Outer ensures the full viewport background; inner centers under 64px header
+  pageOuter: {
     minHeight: "100vh",
     background: THEME.pageBg,
+    backgroundImage: "radial-gradient(ellipse at top, rgba(255,255,255,0.14), transparent 60%)",
+  },
+  page: {
+    minHeight: "calc(100vh - 64px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    backgroundImage: "radial-gradient(ellipse at top, rgba(255,255,255,0.14), transparent 60%)",
   },
   card: {
     width: 380,
