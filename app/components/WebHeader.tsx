@@ -3,7 +3,6 @@ import { Link, router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Text } from "react-native";
 
-// VIGTIGT: hooks/ og utils/ ligger i projekt-roden (søskende til /app)
 import { useSession } from "../../hooks/useSession";
 import { supabase } from "../../utils/supabase";
 
@@ -13,11 +12,10 @@ export default function WebHeader() {
   const { session, loading } = useSession();
   const isAuthed = !!session;
 
-  // Skift mellem mobil/desktop i JS (ikke CSS), så kun én variant rendres
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return; // SSR guard
+    if (typeof window === "undefined") return;
     const mq = window.matchMedia(`(max-width: ${MOBILE_MAX}px)`);
     const update = () => setIsMobile(mq.matches);
     update();
@@ -50,7 +48,7 @@ export default function WebHeader() {
       </div>
 
       {!isMobile ? (
-        // DESKTOP: kun links, ingen burger
+        // DESKTOP: links
         <nav className="nav-links" aria-label="Hovedmenu">
           {!loading && (isAuthed ? (
             <>
@@ -59,7 +57,7 @@ export default function WebHeader() {
               <Link href="/(protected)/Beskeder" className="nav-link">Beskeder</Link>
               <Link href="/(protected)/MineOpslag" className="nav-link">Mine Opslag</Link>
               <Link href="/(protected)/MigScreen" className="nav-link">Mig</Link>
-              <button className="btn" onClick={signOut}>
+              <button className="btn-logout" onClick={signOut}>
                 <Text style={{ fontWeight: "700" }}>Log ud</Text>
               </button>
             </>
@@ -70,7 +68,7 @@ export default function WebHeader() {
           ))}
         </nav>
       ) : (
-        // MOBIL: kun burger + dropdown
+        // MOBIL: burger
         <MobileMenu loading={loading} isAuthed={isAuthed} signOut={signOut} />
       )}
 
@@ -84,6 +82,8 @@ export default function WebHeader() {
         .nav-link{ color:#e2e8f0; text-decoration:none; font-size:14px; opacity:.9 }
         .nav-link:hover{ opacity:1 }
         .btn{ padding:8px 12px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; cursor:pointer }
+        .btn-logout{ padding:8px 12px; border:1px solid #fff; border-radius:10px; background:transparent; color:#fff; cursor:pointer; font-weight:700 }
+        .btn-logout:hover{ background:#fff; color:#0b1220 }
       `}</style>
     </header>
   );
