@@ -2,8 +2,10 @@
 import { Link, router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Text } from "react-native";
-import { useSession } from "../hooks/useSession";
-import { supabase } from "../utils/supabase";
+
+// VIGTIGT: hooks/ og utils/ ligger i projekt-roden (søskende til /app)
+import { useSession } from "../../hooks/useSession";
+import { supabase } from "../../utils/supabase";
 
 const MOBILE_MAX = 719;
 
@@ -11,10 +13,11 @@ export default function WebHeader() {
   const { session, loading } = useSession();
   const isAuthed = !!session;
 
-  // Skift mellem mobil/desktop i JS – ikke CSS
+  // Skift mellem mobil/desktop i JS (ikke CSS), så kun én variant rendres
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return; // SSR guard
     const mq = window.matchMedia(`(max-width: ${MOBILE_MAX}px)`);
     const update = () => setIsMobile(mq.matches);
     update();
@@ -38,12 +41,14 @@ export default function WebHeader() {
           style={{ display: "block" }}
           onError={(e) => {
             const el = e.currentTarget as HTMLImageElement;
-            if (!el.dataset.fallbackTried) { el.dataset.fallbackTried = "1"; el.src = "/liguster-logo-website-clean.png"; }
+            if (!el.dataset.fallbackTried) {
+              el.dataset.fallbackTried = "1";
+              el.src = "/liguster-logo-website-clean.png";
+            }
           }}
         />
       </div>
 
-      {/* Kun én af blokkene rendres */}
       {!isMobile ? (
         // DESKTOP: kun links, ingen burger
         <nav className="nav-links" aria-label="Hovedmenu">
@@ -54,7 +59,9 @@ export default function WebHeader() {
               <Link href="/(protected)/Beskeder" className="nav-link">Beskeder</Link>
               <Link href="/(protected)/MineOpslag" className="nav-link">Mine Opslag</Link>
               <Link href="/(protected)/MigScreen" className="nav-link">Mig</Link>
-              <button className="btn" onClick={signOut}><Text style={{ fontWeight: "700" }}>Log ud</Text></button>
+              <button className="btn" onClick={signOut}>
+                <Text style={{ fontWeight: "700" }}>Log ud</Text>
+              </button>
             </>
           ) : (
             <button className="btn" onClick={() => router.push("/LoginScreen")}>
@@ -64,11 +71,7 @@ export default function WebHeader() {
         </nav>
       ) : (
         // MOBIL: kun burger + dropdown
-        <MobileMenu
-          loading={loading}
-          isAuthed={isAuthed}
-          signOut={signOut}
-        />
+        <MobileMenu loading={loading} isAuthed={isAuthed} signOut={signOut} />
       )}
 
       <style>{`
