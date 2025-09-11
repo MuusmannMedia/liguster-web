@@ -1,107 +1,124 @@
 // app/components/WebHeader.tsx
 import { Link, router } from "expo-router";
 import React, { useState } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
-const C = {
-  bg: "#0b1220",
-  border: "#1e293b",
-  text: "#e2e8f0",
-  dim: "#cbd5e1",
-  btnBorder: "#334155",
-};
+import { Text } from "react-native";
+import { useSession } from "../hooks/useSession";
+import { supabase } from "../utils/supabase";
 
 export default function WebHeader() {
+  const { session, loading } = useSession();
+  const isAuthed = !!session;
   const [open, setOpen] = useState(false);
 
+  const goHome = () => router.push(isAuthed ? "/(protected)/Nabolag" : "/");
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      router.replace("/LoginScreen");
+    }
+  };
+
   return (
-    <View style={styles.nav}>
-      {/* Logo – filen ligger i /public */}
-      <TouchableOpacity onPress={() => router.push("/(protected)/Nabolag")}>
-        <View style={styles.brandWrap}>
-          {Platform.OS === "web" ? (
-            <img
-              src="/Liguster-logo-website-clean.png"
-              alt="Liguster"
-              style={{ height: 28, display: "block" }}
-            />
-          ) : null}
-        </View>
-      </TouchableOpacity>
+    <header className="liguster-header">
+      {/* brand */}
+      <div className="brand" onClick={goHome} role="button" aria-label="Liguster">
+        <img
+          src="/Liguster-logo-website-clean.png"
+          alt="LIGUSTER"
+          height={28}
+          style={{ display: "block" }}
+          onError={(e) => {
+            // fallback hvis nogen dag filnavn skifter case
+            const el = e.currentTarget as HTMLImageElement;
+            if (!el.dataset.fallbackTried) {
+              el.dataset.fallbackTried = "1";
+              el.src = "/liguster-logo-website-clean.png";
+            }
+          }}
+        />
+      </div>
 
-      {/* Desktop-links (skjult på mobil via CSS i layouts) */}
-      <View className="only-desktop" style={styles.right}>
-        <Link href="/(protected)/Nabolag" style={styles.link}>Nabolag</Link>
-        <Link href="/(protected)/forening" style={styles.link}>Forening</Link>
-        <Link href="/(protected)/Beskeder" style={styles.link}>Beskeder</Link>
-        <TouchableOpacity onPress={() => router.push("/LoginScreen")} style={styles.cta}>
-          <Text style={styles.ctaTxt}>Log ud</Text>
-        </TouchableOpacity>
-      </View>
+      {/* DESKTOP: kun links, ingen burger */}
+      <nav className="only-desktop nav-links" aria-label="Hovedmenu">
+        {!loading && (
+          isAuthed ? (
+            <>
+              <Link href="/(protected)/Nabolag" className="nav-link">Nabolag</Link>
+              <Link href="/(protected)/ForeningerScreen" className="nav-link">Forening</Link>
+              <Link href="/(protected)/Beskeder" className="nav-link">Beskeder</Link>
+              <Link href="/(protected)/MineOpslag" className="nav-link">Mine Opslag</Link>
+              <Link href="/(protected)/MigScreen" className="nav-link">Mig</Link>
+              <button className="btn" onClick={signOut}><Text style={{ fontWeight: "700" }}>Log ud</Text></button>
+            </>
+          ) : (
+            <button className="btn" onClick={() => router.push("/LoginScreen")}>
+              <Text style={{ fontWeight: "700" }}>Log ind</Text>
+            </button>
+          )
+        )}
+      </nav>
 
-      {/* Burger på mobil (skjult på desktop) */}
-      <View className="only-mobile" style={{ position: "relative" }}>
-        <TouchableOpacity onPress={() => setOpen(v => !v)} style={styles.burger}>
-          <Text style={styles.burgerIcon}>☰</Text>
-        </TouchableOpacity>
+      {/* MOBIL: kun burger (ingen links synlige) */}
+      <div className="only-mobile mobile-wrap">
+        <button
+          className="burger"
+          aria-label={open ? "Luk menu" : "Åbn menu"}
+          onClick={() => setOpen(v => !v)}
+        >
+          ☰
+        </button>
 
         {open && (
-          <View style={styles.menu}>
-            <Link href="/(protected)/Nabolag" style={styles.menuItem} onPress={() => setOpen(false)}>Nabolag</Link>
-            <Link href="/(protected)/forening" style={styles.menuItem} onPress={() => setOpen(false)}>Forening</Link>
-            <Link href="/(protected)/Beskeder" style={styles.menuItem} onPress={() => setOpen(false)}>Beskeder</Link>
-            <TouchableOpacity onPress={() => { setOpen(false); router.push("/LoginScreen"); }} style={styles.logout}>
-              <Text style={styles.logoutTxt}>Log ud</Text>
-            </TouchableOpacity>
-          </View>
+          <div className="mobile-menu" role="menu">
+            {!loading && (
+              isAuthed ? (
+                <>
+                  <Link href="/(protected)/Nabolag" className="menu-item" onClick={() => setOpen(false)}>Nabolag</Link>
+                  <Link href="/(protected)/ForeningerScreen" className="menu-item" onClick={() => setOpen(false)}>Forening</Link>
+                  <Link href="/(protected)/Beskeder" className="menu-item" onClick={() => setOpen(false)}>Beskeder</Link>
+                  <Link href="/(protected)/MineOpslag" className="menu-item" onClick={() => setOpen(false)}>Mine Opslag</Link>
+                  <Link href="/(protected)/MigScreen" className="menu-item" onClick={() => setOpen(false)}>Mig</Link>
+                  <button className="menu-cta" onClick={() => { setOpen(false); signOut(); }}>Log ud</button>
+                </>
+              ) : (
+                <button className="menu-cta" onClick={() => { setOpen(false); router.push("/LoginScreen"); }}>
+                  Log ind
+                </button>
+              )
+            )}
+          </div>
         )}
-      </View>
-    </View>
+      </div>
+
+      {/* CSS kun for web */}
+      <style>{`
+        .liguster-header{
+          height:64px; background:#0b1220; border-bottom:1px solid #1e293b;
+          padding:0 16px; display:flex; align-items:center; justify-content:space-between; position:relative; z-index:100;
+        }
+        .brand{ height:28px; display:flex; align-items:center; cursor:pointer; }
+        .nav-links{ display:flex; align-items:center; gap:18px; }
+        .nav-link{ color:#e2e8f0; text-decoration:none; font-size:14px; opacity:.9 }
+        .nav-link:hover{ opacity:1 }
+        .btn{ padding:8px 12px; border:1px solid #334155; border-radius:10px; background:#0f172a; color:#e2e8f0; cursor:pointer }
+        .mobile-wrap{ position:relative; display:flex; align-items:center; }
+        .burger{ border:1px solid #334155; border-radius:10px; padding:6px 10px; background:#0f172a; color:#e2e8f0; font-weight:900; font-size:16px; cursor:pointer }
+        .mobile-menu{
+          position:absolute; right:0; top:52px; min-width:220px; background:#0b1220; border:1px solid #1e293b;
+          border-radius:12px; padding:8px; box-shadow:0 8px 20px rgba(0,0,0,.35);
+        }
+        .menu-item{ display:block; padding:10px 12px; color:#e2e8f0; text-decoration:none; font-size:14px }
+        .menu-item:hover{ background:#0f172a }
+        .menu-cta{ margin-top:6px; width:100%; padding:10px 12px; border-radius:10px; background:#fff; color:#0b1220; font-weight:900; border:0; cursor:pointer }
+        /* RESPONSIVE: vælg præcis én af dem på skærmen */
+        .only-mobile{ display:none; }
+        .only-desktop{ display:flex; }
+        @media (max-width: 719px){
+          .only-mobile{ display:block; }
+          .only-desktop{ display:none !important; }
+        }
+      `}</style>
+    </header>
   );
 }
-
-const styles = StyleSheet.create({
-  nav: {
-    height: 64,
-    backgroundColor: C.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    paddingHorizontal: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    zIndex: 100,
-  },
-  brandWrap: { height: 28, justifyContent: "center" },
-  right: { flexDirection: "row", alignItems: "center", gap: 16 },
-  link: { color: C.dim, fontSize: 14, textDecorationLine: "none" as const },
-
-  cta: {
-    paddingVertical: 8, paddingHorizontal: 12,
-    borderWidth: 1, borderColor: C.btnBorder, borderRadius: 10,
-  },
-  ctaTxt: { color: C.text, fontWeight: "700" },
-
-  burger: {
-    borderWidth: 1, borderColor: C.btnBorder, borderRadius: 10,
-    paddingVertical: 6, paddingHorizontal: 10, backgroundColor: "#0f172a",
-  },
-  burgerIcon: { color: C.text, fontWeight: "900", fontSize: 16 },
-
-  menu: {
-    position: "absolute", right: 0, top: 44, minWidth: 220,
-    backgroundColor: C.bg, borderWidth: 1, borderColor: C.border,
-    borderRadius: 12, paddingVertical: 8, zIndex: 999,
-    boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
-  } as any,
-  menuItem: {
-    color: C.text, fontSize: 14,
-    paddingVertical: 10, paddingHorizontal: 12,
-    textDecorationLine: "none" as const,
-  },
-  logout: {
-    marginTop: 6, marginHorizontal: 8, paddingVertical: 10,
-    borderRadius: 10, backgroundColor: "#fff", alignItems: "center",
-  },
-  logoutTxt: { color: "#0b1220", fontWeight: "900" },
-});
