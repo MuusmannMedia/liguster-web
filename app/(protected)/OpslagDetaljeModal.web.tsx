@@ -1,221 +1,201 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Image } from "react-native";
-import { useSession } from "../../hooks/useSession";
+// app/(protected)/OpslagDetaljeModal.web.tsx
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { supabase } from "../../utils/supabase";
 
-type Post = {
+// Valgfrit: hvis du vil vise distance senere, kan du importere din hook for location.
+// import { useNabolag } from "../../hooks/useNabolag";
+
+type PostRow = {
   id: string;
-  overskrift: string;
-  text: string;
-  image_url?: string;
-  omraade?: string;
-  kategori?: string;
-  created_at: string;
-  user_id: string;
+  overskrift: string | null;
+  text: string | null;
+  image_url: string | null;
+  kategori: string | null;
+  omraade: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string | null;
 };
 
-export default function OpslagDetaljeModalWeb() {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { session } = useSession();
+const THEME = {
+  overlay: "rgba(0,0,0,0.45)",
+  cardBg: "#ffffff",
+  cardInk: "#0f172a",
+  sub: "#475569",
+  line: "#e5e7eb",
+  chipBg: "#eef2ff",
+  chipInk: "#1e293b",
+  btn: "#0b1220",
+  btnText: "#ffffff",
+};
 
-  const [post, setPost] = useState<Post | null>(null);
+const RADII = { md: 12, lg: 16, xl: 22 };
+
+export default function OpslagDetaljeModalWeb() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { width, height } = useWindowDimensions();
+
+  // Responsiv bredde: 720 på desktop, smallere på mobil
+  const cardWidth = Math.min(width - 32, 720);
+  // Billedhøjde: 9/16 af kortets bredde, men minimum 220
+  const imageHeight = Math.max(220, Math.round((cardWidth * 9) / 16));
+
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-  const [contacting, setContacting] = useState(false);
+  const [row, setRow] = useState<PostRow | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
     let alive = true;
-
     (async () => {
+      if (!id) { setError("Mangler id."); setLoading(false); return; }
       try {
         setLoading(true);
-        setErr(null);
-
         const { data, error } = await supabase
           .from("posts")
-          .select("id,overskrift,text,image_url,omraade,kategori,created_at,user_id")
+          .select("id, overskrift, text, image_url, kategori, omraade, latitude, longitude, created_at")
           .eq("id", id)
           .maybeSingle();
-
         if (error) throw error;
-        if (!alive) return;
-
-        if (!data) {
-          setErr("Opslag ikke fundet.");
-        } else {
-          setPost(data as Post);
-        }
+        if (alive) setRow(data as PostRow);
       } catch (e: any) {
-        if (alive) setErr(e.message ?? "Kunne ikke hente opslag.");
+        if (alive) setError(e?.message ?? "Kunne ikke hente opslag.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [id]);
 
-  async function handleContact() {
-    if (!session?.user || !post) return;
-    setContacting(true);
-
+  const created = useMemo(() => {
+    if (!row?.created_at) return null;
     try {
-      // Tjek om en tråd allerede findes
-      const { data: existing, error: exErr } = await supabase
-        .from("forening_threads")
-        .select("id")
-        .eq("is_private", true)
-        .contains("participants", [session.user.id, post.user_id])
-        .maybeSingle();
+      const d = new Date(row.created_at);
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    } catch { return null; }
+  }, [row?.created_at]);
 
-      if (exErr) throw exErr;
-
-      let threadId: string;
-
-      if (existing) {
-        threadId = existing.id;
-      } else {
-        // Opret en ny privat tråd
-        const { data: newThread, error: newErr } = await supabase
-          .from("forening_threads")
-          .insert({
-            is_private: true,
-            participants: [session.user.id, post.user_id],
-            created_at: new Date().toISOString(),
-          })
-          .select("id")
-          .single();
-
-        if (newErr) throw newErr;
-        threadId = newThread.id;
-      }
-
-      // Naviger til tråden
-      router.push(`/(protected)/threads/${threadId}`);
-    } catch (e: any) {
-      console.error("Kontakt fejl:", e.message);
-      alert("Kunne ikke starte samtale.");
-    } finally {
-      setContacting(false);
-    }
-  }
-
-  if (loading) {
-    return <main className="content"><p>Henter opslag…</p>{styles}</main>;
-  }
-
-  if (err || !post) {
-    return (
-      <main className="content">
-        <div className="error">{err ?? "Ukendt fejl"}</div>
-        <button onClick={() => router.back()} className="btn-secondary">Tilbage</button>
-        {styles}
-      </main>
-    );
-  }
+  const close = () => router.back();
 
   return (
-    <main className="content">
-      {post.image_url && (
-        <div className="hero">
-          <Image
-            source={{ uri: post.image_url }}
-            style={{ width: "100%", height: "auto" as any, borderRadius: 12 }}
-          />
-        </div>
-      )}
+    <View style={[styles.overlay, { width, height }]}>
+      <View style={[styles.card, { width: cardWidth }]}>
+        {/* Topbar */}
+        <View style={styles.topRow}>
+          <Text style={styles.title}>{row?.overskrift ?? (loading ? "Indlæser…" : "Opslag")}</Text>
+          <TouchableOpacity onPress={close} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Luk">
+            <Text style={styles.closeBtnText}>Luk</Text>
+          </TouchableOpacity>
+        </View>
 
-      <h1 className="title">{post.overskrift}</h1>
+        {/* Indhold */}
+        {loading ? (
+          <View style={styles.centerArea}>
+            <ActivityIndicator size="large" color={THEME.cardInk} />
+          </View>
+        ) : error ? (
+          <Text style={{ color: "crimson", fontWeight: "700" }}>{error}</Text>
+        ) : row ? (
+          <View>
+            {!!row.image_url && (
+              <Image
+                source={{ uri: row.image_url }}
+                style={{ width: "100%", height: imageHeight, borderRadius: RADII.md, backgroundColor: "#f1f5f9" }}
+                resizeMode="cover"
+              />
+            )}
 
-      <div className="meta">
-        {post.kategori && <span className="pill">{post.kategori}</span>}
-        {post.omraade && <span className="pill">{post.omraade}</span>}
-      </div>
+            <View style={{ marginTop: 12, rowGap: 8 }}>
+              {/* Chips */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {!!row.kategori && <Chip>{row.kategori}</Chip>}
+                {!!row.omraade && <Chip>{row.omraade}</Chip>}
+                {!!created && <Chip>{created}</Chip>}
+              </View>
 
-      <p className="body">{post.text}</p>
-
-      <div className="actions">
-        <button className="btn-secondary" onClick={() => router.back()}>
-          Luk
-        </button>
-        {session?.user?.id !== post.user_id && (
-          <button
-            className="btn-primary"
-            onClick={handleContact}
-            disabled={contacting}
-          >
-            {contacting ? "Åbner…" : "Kontakt"}
-          </button>
+              {!!row.text && (
+                <Text style={styles.body}>{row.text}</Text>
+              )}
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.body}>Opslaget findes ikke.</Text>
         )}
-      </div>
-      {styles}
-    </main>
+      </View>
+    </View>
   );
 }
 
-const styles = (
-  <style>{`
-    .content{
-      margin: 0 auto;
-      padding: 16px;
-      max-width: 900px;
-    }
-    .hero{ margin-bottom: 16px; }
-    .title{
-      font-size: 28px;
-      font-weight: 800;
-      margin: 12px 0;
-      color: #0b1220;
-    }
-    .meta{ display:flex; gap:8px; margin-bottom:12px; }
-    .pill{
-      background:#f1f5f9;
-      border-radius:6px;
-      padding:4px 8px;
-      font-size:14px;
-      color:#475569;
-    }
-    .body{
-      font-size:16px;
-      line-height:1.6;
-      margin-bottom:20px;
-      color:#0b1220;
-    }
-    .actions{ margin-top:20px; display:flex; gap:12px; }
-    .btn-secondary{
-      padding:10px 14px;
-      border-radius:10px;
-      border:1px solid #334155;
-      background:#fff;
-      font-weight:700;
-      cursor:pointer;
-    }
-    .btn-primary{
-      padding:10px 14px;
-      border-radius:10px;
-      border:0;
-      background:#0b1220;
-      color:#fff;
-      font-weight:700;
-      cursor:pointer;
-    }
-    .error{
-      background:#fee2e2;
-      border:1px solid #ef4444;
-      color:#7f1d1d;
-      padding:10px;
-      border-radius:8px;
-      margin-bottom:12px;
-    }
-    @media (max-width:719px){
-      .content{ max-width: 92vw; padding:12px; }
-      .title{ font-size:22px; }
-      .body{ font-size:15px; }
-    }
-  `}</style>
-);
+/* —————— små komponenter —————— */
+function Chip({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.chip}>
+      <Text style={styles.chipText}>{children}</Text>
+    </View>
+  );
+}
+
+/* —————— styles —————— */
+const styles = StyleSheet.create({
+  overlay: {
+    position: "fixed" as const,
+    top: 0, left: 0,
+    backgroundColor: THEME.overlay,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+    zIndex: 9999,
+    // lidt blur for web
+    ...(Platform.OS === "web" ? { backdropFilter: "blur(2px)" } as any : null),
+  },
+  card: {
+    backgroundColor: THEME.cardBg,
+    borderRadius: RADII.xl,
+    borderWidth: 1,
+    borderColor: THEME.line,
+    padding: 16,
+    boxShadow: Platform.OS === "web" ? ("0 16px 44px rgba(0,0,0,.35)") as any : undefined,
+    maxHeight: "92vh",
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    gap: 12,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: THEME.cardInk,
+    flexShrink: 1,
+  },
+  closeBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: THEME.btn,
+    borderWidth: 2,
+    borderColor: "#ffffff",
+  },
+  closeBtnText: {
+    color: THEME.btnText,
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  chip: {
+    alignSelf: "flex-start",
+    backgroundColor: THEME.chipBg,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  chipText: { color: THEME.chipInk, fontWeight: "800", fontSize: 12 },
+  body: {
+    color: "#111827",
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  centerArea: { alignItems: "center", justifyContent: "center", paddingVertical: 32 },
+});
