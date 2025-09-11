@@ -1,201 +1,254 @@
 // app/(protected)/OpslagDetaljeModal.web.tsx
-import { router, useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { Image, Platform, StyleSheet, Text, View } from "react-native";
 import { supabase } from "../../utils/supabase";
 
-// Valgfrit: hvis du vil vise distance senere, kan du importere din hook for location.
-// import { useNabolag } from "../../hooks/useNabolag";
+// --- tweak this to match your message/compose route ---
+function buildReplyHref(postId: string, toUserId: string) {
+  // Example: open messages screen prefilled with this post
+  return `/(protected)/Beskeder?postId=${encodeURIComponent(postId)}&to=${encodeURIComponent(toUserId)}`;
+}
 
 type PostRow = {
   id: string;
+  user_id: string;
+  created_at: string | null;
   overskrift: string | null;
   text: string | null;
-  image_url: string | null;
-  kategori: string | null;
   omraade: string | null;
+  kategori: string | null;
+  image_url: string | null;
   latitude: number | null;
   longitude: number | null;
-  created_at: string | null;
 };
 
 const THEME = {
-  overlay: "rgba(0,0,0,0.45)",
+  scrim: "rgba(0,0,0,.55)",
   cardBg: "#ffffff",
-  cardInk: "#0f172a",
+  ink: "#0b1220",
   sub: "#475569",
-  line: "#e5e7eb",
+  line: "#e5e8ec",
   chipBg: "#eef2ff",
   chipInk: "#1e293b",
-  btn: "#0b1220",
-  btnText: "#ffffff",
+  btnDark: "#0b1220",
 };
-
-const RADII = { md: 12, lg: 16, xl: 22 };
 
 export default function OpslagDetaljeModalWeb() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { width, height } = useWindowDimensions();
-
-  // Responsiv bredde: 720 på desktop, smallere på mobil
-  const cardWidth = Math.min(width - 32, 720);
-  // Billedhøjde: 9/16 af kortets bredde, men minimum 220
-  const imageHeight = Math.max(220, Math.round((cardWidth * 9) / 16));
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [row, setRow] = useState<PostRow | null>(null);
+  const [post, setPost] = useState<PostRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // fetch post
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (!id) { setError("Mangler id."); setLoading(false); return; }
+      if (!id) return;
+      setLoading(true);
+      setError(null);
       try {
-        setLoading(true);
         const { data, error } = await supabase
           .from("posts")
-          .select("id, overskrift, text, image_url, kategori, omraade, latitude, longitude, created_at")
+          .select(
+            "id,user_id,created_at,overskrift,text,omraade,kategori,image_url,latitude,longitude"
+          )
           .eq("id", id)
-          .maybeSingle();
+          .single();
         if (error) throw error;
-        if (alive) setRow(data as PostRow);
+        if (alive) setPost(data as PostRow);
       } catch (e: any) {
-        if (alive) setError(e?.message ?? "Kunne ikke hente opslag.");
+        if (alive) setError(e?.message ?? "Kunne ikke hente opslaget.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
-  const created = useMemo(() => {
-    if (!row?.created_at) return null;
-    try {
-      const d = new Date(row.created_at);
-      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-    } catch { return null; }
-  }, [row?.created_at]);
-
+  // close action – go back to previous page
   const close = () => router.back();
 
+  const created = useMemo(() => {
+    if (!post?.created_at) return null;
+    try {
+      const d = new Date(post.created_at);
+      return d.toLocaleDateString("da-DK", { day: "2-digit", month: "short", year: "numeric" });
+    } catch {
+      return null;
+    }
+  }, [post?.created_at]);
+
+  // guard: if no id at all, go back
+  useEffect(() => {
+    if (!id) close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   return (
-    <View style={[styles.overlay, { width, height }]}>
-      <View style={[styles.card, { width: cardWidth }]}>
-        {/* Topbar */}
-        <View style={styles.topRow}>
-          <Text style={styles.title}>{row?.overskrift ?? (loading ? "Indlæser…" : "Opslag")}</Text>
-          <TouchableOpacity onPress={close} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Luk">
-            <Text style={styles.closeBtnText}>Luk</Text>
-          </TouchableOpacity>
+    <View style={styles.overlay}>
+      <View style={styles.card}>
+        {/* Header row */}
+        <View style={styles.headerRow}>
+          <Text style={styles.titleText}>{post?.overskrift || (loading ? "Indlæser…" : "Opslag")}</Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {post?.id && post?.user_id ? (
+              <Link
+                href={buildReplyHref(post.id, post.user_id)}
+                style={[styles.pillBtn, styles.primaryPill]}
+                aria-label="Svar på opslag"
+              >
+                <Text style={[styles.pillText, { color: "#0b1220", fontWeight: "900" }]}>Svar</Text>
+              </Link>
+            ) : null}
+            <button onClick={close} className="pill-close" aria-label="Luk">
+              Luk
+            </button>
+          </View>
         </View>
 
-        {/* Indhold */}
-        {loading ? (
-          <View style={styles.centerArea}>
-            <ActivityIndicator size="large" color={THEME.cardInk} />
-          </View>
-        ) : error ? (
-          <Text style={{ color: "crimson", fontWeight: "700" }}>{error}</Text>
-        ) : row ? (
-          <View>
-            {!!row.image_url && (
-              <Image
-                source={{ uri: row.image_url }}
-                style={{ width: "100%", height: imageHeight, borderRadius: RADII.md, backgroundColor: "#f1f5f9" }}
-                resizeMode="cover"
-              />
-            )}
+        {/* Content body scrolls if needed */}
+        <View style={styles.body}>
+          {error ? (
+            <Text style={{ color: "#991b1b", fontWeight: "800" }}>{error}</Text>
+          ) : loading ? (
+            <Text style={{ color: THEME.sub }}>Indlæser…</Text>
+          ) : post ? (
+            <>
+              {post.image_url ? (
+                <Image
+                  source={{ uri: post.image_url }}
+                  style={styles.image}
+                  // @ts-ignore react-native-web
+                  alt={post.overskrift ?? "Billede"}
+                />
+              ) : null}
 
-            <View style={{ marginTop: 12, rowGap: 8 }}>
-              {/* Chips */}
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                {!!row.kategori && <Chip>{row.kategori}</Chip>}
-                {!!row.omraade && <Chip>{row.omraade}</Chip>}
-                {!!created && <Chip>{created}</Chip>}
+              <View style={{ gap: 8 }}>
+                {/* chips */}
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                  {post.kategori ? (
+                    <View style={styles.chip}>
+                      <Text style={styles.chipTxt}>{post.kategori}</Text>
+                    </View>
+                  ) : null}
+                  {post.omraade ? (
+                    <View style={styles.chip}>
+                      <Text style={styles.chipTxt}>{post.omraade}</Text>
+                    </View>
+                  ) : null}
+                  {created ? (
+                    <View style={styles.chipLight}>
+                      <Text style={[styles.chipTxt, { color: THEME.sub }]}>{created}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {post.text ? (
+                  <Text style={styles.bodyText}>{post.text}</Text>
+                ) : null}
               </View>
-
-              {!!row.text && (
-                <Text style={styles.body}>{row.text}</Text>
-              )}
-            </View>
-          </View>
-        ) : (
-          <Text style={styles.body}>Opslaget findes ikke.</Text>
-        )}
+            </>
+          ) : null}
+        </View>
       </View>
+
+      {/* some light CSS specific to web for the "Luk" pill to match your style */}
+      <style>{`
+        .pill-close{
+          padding:8px 12px;
+          border-radius:999px;
+          border:1.5px solid #cbd5e1;
+          background:#0b1220;
+          color:#fff;
+          font-weight:800;
+          cursor:pointer;
+        }
+        .pill-close:hover{ opacity:.95 }
+      `}</style>
     </View>
   );
 }
 
-/* —————— små komponenter —————— */
-function Chip({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={styles.chip}>
-      <Text style={styles.chipText}>{children}</Text>
-    </View>
-  );
-}
-
-/* —————— styles —————— */
+/* ───────── styles ───────── */
 const styles = StyleSheet.create({
   overlay: {
     position: "fixed" as const,
-    top: 0, left: 0,
-    backgroundColor: THEME.overlay,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
+    inset: 0,
+    backgroundColor: THEME.scrim,
     zIndex: 9999,
-    // lidt blur for web
-    ...(Platform.OS === "web" ? { backdropFilter: "blur(2px)" } as any : null),
+    // center the card
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
   },
   card: {
+    width: "min(720px, calc(100vw - 32px))",
+    maxHeight: "min(86vh, 1000px)",
     backgroundColor: THEME.cardBg,
-    borderRadius: RADII.xl,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: THEME.line,
-    padding: 16,
-    boxShadow: Platform.OS === "web" ? ("0 16px 44px rgba(0,0,0,.35)") as any : undefined,
-    maxHeight: "92vh",
+    // separate internal scroll from the fixed overlay
+    overflow: "hidden",
+    boxShadow: "0 18px 50px rgba(0,0,0,.35)" as any,
+    display: "flex",
   },
-  topRow: {
+  headerRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.line,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    backgroundColor: "#f8fafc",
+  },
+  titleText: { fontSize: 18, fontWeight: "900", color: THEME.ink },
+  body: {
+    padding: 14,
     gap: 12,
+    overflowY: "auto" as any, // so mobile & desktop can scroll content independently
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: THEME.cardInk,
-    flexShrink: 1,
-  },
-  closeBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+  image: {
+    width: "100%",
+    aspectRatio: 16 / 9,
     borderRadius: 12,
-    backgroundColor: THEME.btn,
-    borderWidth: 2,
-    borderColor: "#ffffff",
-  },
-  closeBtnText: {
-    color: THEME.btnText,
-    fontWeight: "900",
-    fontSize: 14,
+    backgroundColor: "#f1f5f9",
   },
   chip: {
-    alignSelf: "flex-start",
     backgroundColor: THEME.chipBg,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  chipText: { color: THEME.chipInk, fontWeight: "800", fontSize: 12 },
-  body: {
-    color: "#111827",
-    fontSize: 16,
-    lineHeight: 22,
+  chipLight: {
+    backgroundColor: "#f6f8fa",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: THEME.line,
   },
-  centerArea: { alignItems: "center", justifyContent: "center", paddingVertical: 32 },
+  chipTxt: { color: THEME.chipInk, fontWeight: "800", fontSize: 12 },
+  bodyText: { color: "#111827", lineHeight: 20, fontSize: 14 },
+
+  // pills (for Link “Svar”)
+  pillBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === "web" ? 8 : 10,
+    borderWidth: 1.5,
+    borderColor: "#cbd5e1",
+    backgroundColor: "#fff",
+  },
+  primaryPill: {
+    backgroundColor: "#fff",
+  },
+  pillText: { fontSize: 14, fontWeight: "800" },
 });
