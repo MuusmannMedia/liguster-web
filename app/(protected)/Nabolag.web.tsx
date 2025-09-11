@@ -1,7 +1,9 @@
+// app/(protected)/Nabolag.web.tsx
 import { decode } from "base64-arraybuffer";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useMemo, useState } from "react";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator, FlatList, Image, Keyboard, Modal, Platform, RefreshControl,
   StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback,
@@ -33,9 +35,8 @@ const SHADOW = {
   },
 };
 const distances = [1, 2, 3, 5, 10, 20, 50];
-const km = (n: number) => (Number.isNaN(n) ? "" : `${n.toFixed(1)} km`);
 
-/* ───────── UI-klodser ───────── */
+/* ───────── Små UI-klodser ───────── */
 function Chip({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.chip}>
@@ -104,7 +105,7 @@ function RadiusPicker({ value, onChange }: { value: number; onChange: (v: number
   );
 }
 
-/* ───────── Opret-opslag ───────── */
+/* ───────── Opret-opslag (uændret) ───────── */
 function OpretOpslagWeb({
   visible, onClose, onSubmit, currentUserId,
 }: {
@@ -217,45 +218,6 @@ function OpretOpslagWeb({
   );
 }
 
-/* ───────── Detalje ───────── */
-function OpslagDetaljeWeb({
-  visible, opslag, onClose, distanceText,
-}: {
-  visible: boolean; opslag: Post | null; onClose: () => void; distanceText?: string | null;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { width: 640 }]}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={styles.modalTitle}>Opslag</Text>
-            <TouchableOpacity onPress={onClose}><Text style={{ fontSize: 18, fontWeight: "900" }}>✕</Text></TouchableOpacity>
-          </View>
-
-        {opslag ? (
-          <View>
-            {!!opslag.image_url && (
-              <Image source={{ uri: opslag.image_url }} style={{ width: "100%", height: 280, borderRadius: RADII.md, marginBottom: 10 }} />
-            )}
-            {!!opslag.kategori && <Chip>{opslag.kategori}</Chip>}
-            <Text style={{ fontWeight: "900", fontSize: 18, color: THEME.cardInk }}>{opslag.overskrift}</Text>
-            {!!opslag.omraade && <Text style={{ color: "#475569", marginTop: 2 }}>{opslag.omraade}</Text>}
-            {!!distanceText && <Text style={{ color: "#6b7280", marginTop: 2 }}>{distanceText}</Text>}
-            {!!opslag.text && <Text style={{ color: "#111827", marginTop: 10, lineHeight: 20 }}>{opslag.text}</Text>}
-          </View>
-        ) : (
-          <Text>Indlæser…</Text>
-        )}
-
-          <TouchableOpacity onPress={onClose} style={[styles.action, styles.btn, { marginTop: 16 }]}>
-            <Text style={styles.actionText}>Luk</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 /* ───────── Skærm ───────── */
 export default function NabolagWeb() {
   // Backup: sikre scroll/klik globalt
@@ -271,7 +233,8 @@ export default function NabolagWeb() {
 
   const {
     userId, userLocation, loading, refreshing, filteredPosts, searchQuery, setSearchQuery,
-    radius, handleRadiusChange, kategoriFilter, setKategoriFilter, onRefresh, createPost, distanceInKm,
+    radius, handleRadiusChange, kategoriFilter, setKategoriFilter, onRefresh, createPost,
+    distanceInKm,
   } = useNabolag();
 
   const { width } = useWindowDimensions();
@@ -284,21 +247,16 @@ export default function NabolagWeb() {
   const isNarrow = boardW < 560;
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<Post | null>(null);
-
-  const distanceText = useMemo(() => {
-    if (!selected || !userLocation || !selected.latitude || !selected.longitude) return null;
-    return km(distanceInKm(userLocation.latitude, userLocation.longitude, selected.latitude, selected.longitude));
-  }, [selected, userLocation]);
 
   const renderItem = ({ item }: { item: Post }) => {
-    const showD = !!userLocation && !!item.latitude && !!item.longitude;
-    const d = showD ? distanceInKm(userLocation!.latitude, userLocation!.longitude, item.latitude!, item.longitude!) : NaN;
-
     return (
       <TouchableOpacity
-        onPress={() => { setSelected(item); setDetailOpen(true); }}
+        onPress={() =>
+          router.push({
+            pathname: "/(protected)/OpslagDetaljeModal",
+            params: { id: item.id },
+          })
+        }
         activeOpacity={0.92}
         style={{ width: isGrid ? cardW : singleW, marginBottom: GRID.gap }}
       >
@@ -309,7 +267,7 @@ export default function NabolagWeb() {
             <Text style={styles.title}>{item.overskrift}</Text>
             {!!item.omraade && <Text style={styles.place}>{item.omraade}</Text>}
             {!!item.text && <Text numberOfLines={1} ellipsizeMode="tail" style={styles.teaser}>{item.text}</Text>}
-            {showD ? <Text style={styles.distance}>{km(d)} væk</Text> : null}
+            {/* afstandsbadge beholdes ikke her – vises inde i detalje */}
           </View>
         </View>
       </TouchableOpacity>
@@ -359,7 +317,6 @@ export default function NabolagWeb() {
             columnWrapperStyle={isGrid ? { gap: GRID.gap } : undefined}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"
-            // MOBIL-WEB: lad FlatList scrolle selv
             scrollEnabled={true}
             removeClippedSubviews={false}
             showsVerticalScrollIndicator={false}
@@ -374,12 +331,6 @@ export default function NabolagWeb() {
         onClose={() => setCreateOpen(false)}
         onSubmit={async (payload) => { await createPost(payload); }}
         currentUserId={userId}
-      />
-      <OpslagDetaljeWeb
-        visible={detailOpen}
-        opslag={selected}
-        onClose={() => setDetailOpen(false)}
-        distanceText={distanceText}
       />
     </View>
   );
@@ -437,7 +388,6 @@ const styles = StyleSheet.create({
   title: { fontWeight: "900", fontSize: 16, color: THEME.cardInk },
   place: { fontSize: 12, color: "#64748b", marginTop: 2 },
   teaser: { fontSize: 13, color: "#475569", marginTop: 6 },
-  distance: { fontSize: 11, color: "#6b7280", marginTop: 6 },
 
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
@@ -468,7 +418,6 @@ const styles = StyleSheet.create({
   smallBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
   btn: { backgroundColor: THEME.btn },
   grayBtn: { backgroundColor: "#9aa0a6" },
-  preview: { width: "100%", height: 180, backgroundColor: "#f1f5f9", borderRadius: RADII.md },
 
   action: { borderRadius: RADII.md, paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
   actionText: { color: "#fff", fontSize: 14, fontWeight: "900" },
