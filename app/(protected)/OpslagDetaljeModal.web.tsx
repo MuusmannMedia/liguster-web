@@ -47,7 +47,7 @@ export default function OpslagDetaljeModalWeb() {
       }
     })();
 
-    // lock background scroll a bit
+    // lock background scrolling
     if (typeof document !== "undefined") {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -66,7 +66,7 @@ export default function OpslagDetaljeModalWeb() {
     if (!canSend) return;
     try {
       setSending(true);
-      // TODO: save message in Supabase
+      // TODO: Save message in Supabase
       await new Promise(r => setTimeout(r, 450));
       setReply(""); setReplyOpen(false);
       alert("Din besked er sendt.");
@@ -141,19 +141,20 @@ export default function OpslagDetaljeModalWeb() {
       )}
 
       <style>{`
-        /* make sizing predictable so textarea never overflows the card */
+        /* Predictable sizing */
         .overlay, .overlay * { box-sizing: border-box; }
 
-        /* Always above fixed header, fill real viewport on iOS too */
+        /* Always above header; use dynamic viewport on iOS */
         .overlay{
           position: fixed;
           inset: 0;
           height: 100dvh;
           min-height: 100dvh;
           background: rgba(2,6,23,0.60);
-          z-index: 100000;
+          z-index: 100000; /* above WebHeader */
           display: flex;
           overscroll-behavior: contain;
+          pointer-events: auto;
         }
 
         .sheet{
@@ -165,15 +166,6 @@ export default function OpslagDetaljeModalWeb() {
           overflow: auto;
           -webkit-overflow-scrolling: touch;
         }
-        @media (max-width: ${MOBILE_MAX}px){
-          .sheet{
-            align-items: flex-start;
-            padding-top: calc(64px + max(env(safe-area-inset-top, 0px), 10px));
-            padding-left: 12px;
-            padding-right: 12px;
-            padding-bottom: 24px;
-          }
-        }
 
         .card{
           width: min(880px, 92vw);
@@ -182,7 +174,31 @@ export default function OpslagDetaljeModalWeb() {
           border: 1px solid #E6E9EE;
           box-shadow: 0 20px 50px rgba(0,0,0,.35);
           padding: 14px;
+          max-height: calc(100dvh - 48px);
+          overflow: auto;
         }
+
+        /* 🔥 RADIKALT MOBIL-FIX:
+           gør selve kortet fixed og forankr det under headeren,
+           så det ALDRIG havner “under” den grå overlay på iOS. */
+        @media (max-width: ${MOBILE_MAX}px){
+          .sheet{
+            align-items: center;
+            justify-content: center;
+            padding: 0;       /* styres af card nedenfor */
+            overflow: visible;
+          }
+          .card{
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            top: calc(64px + env(safe-area-inset-top, 0px) + 12px);
+            width: min(640px, 94vw);
+            max-height: calc(100dvh - (64px + env(safe-area-inset-top, 0px) + 24px));
+            overflow: auto;
+          }
+        }
+
         .card.small{
           width: min(560px, 94vw);
           padding: 16px;
@@ -195,15 +211,9 @@ export default function OpslagDetaljeModalWeb() {
           gap: 12px;
           padding-bottom: 8px;
         }
-        .title{
-          margin: 0;
-          font-size: 20px;
-          font-weight: 900;
-          color: #0b1220;
-        }
+        .title{ margin: 0; font-size: 20px; font-weight: 900; color: #0b1220; }
         .headBtns{ display: flex; gap: 8px; }
 
-        /* Unified buttons */
         .pillBtn{
           appearance: none;
           border: 1.5px solid #E6E9EE;
@@ -230,11 +240,11 @@ export default function OpslagDetaljeModalWeb() {
           background: #f1f5f9;
           border: 1px solid #E6E9EE;
         }
-        @media (max-width: ${MOBILE_MAX}px){ .hero{ max-height: 42vh; } }
-
-        .metaRow{
-          display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
+        @media (max-width: ${MOBILE_MAX}px){
+          .hero{ max-height: 42vh; }
         }
+
+        .metaRow{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .chip{
           background:#eef2ff; color:#1e293b; border-radius:999px; padding:6px 10px;
           font-weight:800; font-size:12px;
@@ -242,7 +252,6 @@ export default function OpslagDetaljeModalWeb() {
 
         .body{ color:#111827; margin-top:12px; line-height:1.5; font-size:15px; }
 
-        /* Reply dialog */
         .replyTitle{ margin:0 0 10px 0; color:#0b1220; font-weight:900; font-size:18px; }
         .textarea{
           width: 100%;
@@ -257,9 +266,7 @@ export default function OpslagDetaljeModalWeb() {
           outline: none;
           display: block;
         }
-        .replyBtns{
-          display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px;
-        }
+        .replyBtns{ display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
       `}</style>
     </>
   );
