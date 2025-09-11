@@ -1,14 +1,8 @@
 // app/(protected)/OpslagDetaljeModal.web.tsx
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, Platform, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, TextInput, View } from "react-native";
 import { supabase } from "../../utils/supabase";
-
-// --- tweak this to match your message/compose route ---
-function buildReplyHref(postId: string, toUserId: string) {
-  // Example: open messages screen prefilled with this post
-  return `/(protected)/Beskeder?postId=${encodeURIComponent(postId)}&to=${encodeURIComponent(toUserId)}`;
-}
 
 type PostRow = {
   id: string;
@@ -31,7 +25,6 @@ const THEME = {
   line: "#e5e8ec",
   chipBg: "#eef2ff",
   chipInk: "#1e293b",
-  btnDark: "#0b1220",
 };
 
 export default function OpslagDetaljeModalWeb() {
@@ -41,6 +34,21 @@ export default function OpslagDetaljeModalWeb() {
   const [loading, setLoading] = useState(true);
   const [post, setPost] = useState<PostRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // reply dialog
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState("");
+
+  // lås baggrundsscroll mens modal-siden er åben
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, []);
 
   // fetch post
   useEffect(() => {
@@ -52,9 +60,7 @@ export default function OpslagDetaljeModalWeb() {
       try {
         const { data, error } = await supabase
           .from("posts")
-          .select(
-            "id,user_id,created_at,overskrift,text,omraade,kategori,image_url,latitude,longitude"
-          )
+          .select("id,user_id,created_at,overskrift,text,omraade,kategori,image_url,latitude,longitude")
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -70,7 +76,6 @@ export default function OpslagDetaljeModalWeb() {
     };
   }, [id]);
 
-  // close action – go back to previous page
   const close = () => router.back();
 
   const created = useMemo(() => {
@@ -83,7 +88,16 @@ export default function OpslagDetaljeModalWeb() {
     }
   }, [post?.created_at]);
 
-  // guard: if no id at all, go back
+  // SEND: som standard hopper vi til Beskeder med prefill
+  const sendReply = () => {
+    if (!post?.user_id || !post?.id || !replyText.trim()) return;
+    const href = `/(protected)/Beskeder?compose=1&to=${encodeURIComponent(
+      post.user_id
+    )}&postId=${encodeURIComponent(post.id)}&text=${encodeURIComponent(replyText.trim())}`;
+    router.replace(href);
+  };
+
+  // guard
   useEffect(() => {
     if (!id) close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,26 +106,26 @@ export default function OpslagDetaljeModalWeb() {
   return (
     <View style={styles.overlay}>
       <View style={styles.card}>
-        {/* Header row */}
+        {/* Header */}
         <View style={styles.headerRow}>
           <Text style={styles.titleText}>{post?.overskrift || (loading ? "Indlæser…" : "Opslag")}</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {post?.id && post?.user_id ? (
-              <Link
-                href={buildReplyHref(post.id, post.user_id)}
-                style={[styles.pillBtn, styles.primaryPill]}
+              <button
+                onClick={() => setReplyOpen(true)}
+                className="pill"
                 aria-label="Svar på opslag"
               >
-                <Text style={[styles.pillText, { color: "#0b1220", fontWeight: "900" }]}>Svar</Text>
-              </Link>
+                Svar
+              </button>
             ) : null}
-            <button onClick={close} className="pill-close" aria-label="Luk">
+            <button onClick={close} className="pill" aria-label="Luk">
               Luk
             </button>
           </View>
         </View>
 
-        {/* Content body scrolls if needed */}
+        {/* Body (scrolls) */}
         <View style={styles.body}>
           {error ? (
             <Text style={{ color: "#991b1b", fontWeight: "800" }}>{error}</Text>
@@ -155,11 +169,32 @@ export default function OpslagDetaljeModalWeb() {
             </>
           ) : null}
         </View>
+
+        {/* Reply dialog (inline) */}
+        {replyOpen && (
+          <View style={styles.replyWrap}>
+            <Text style={styles.replyLabel}>Skriv en besked til forfatteren</Text>
+            <TextInput
+              style={styles.replyInput}
+              multiline
+              placeholder="Din besked…"
+              placeholderTextColor="#94a3b8"
+              value={replyText}
+              onChangeText={setReplyText}
+            />
+            <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
+              <button className="pill" onClick={() => setReplyOpen(false)}>Annullér</button>
+              <button className="pill primary" onClick={sendReply} disabled={!replyText.trim()}>
+                Send
+              </button>
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* some light CSS specific to web for the "Luk" pill to match your style */}
+      {/* Web-CSS for knapper + iOS Safari scroll hints */}
       <style>{`
-        .pill-close{
+        .pill{
           padding:8px 12px;
           border-radius:999px;
           border:1.5px solid #cbd5e1;
@@ -168,7 +203,12 @@ export default function OpslagDetaljeModalWeb() {
           font-weight:800;
           cursor:pointer;
         }
-        .pill-close:hover{ opacity:.95 }
+        .pill.primary{ background:#ffffff; color:#0b1220; }
+        .pill:disabled{ opacity:.6; cursor:not-allowed; }
+        .pill:hover{ opacity:.95 }
+
+        /* iOS Safari smooth scroll inside the card */
+        .rnw-overflow-scroll{ -webkit-overflow-scrolling: touch; }
       `}</style>
     </View>
   );
@@ -181,20 +221,19 @@ const styles = StyleSheet.create({
     inset: 0,
     backgroundColor: THEME.scrim,
     zIndex: 9999,
-    // center the card
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: 12,
   },
   card: {
-    width: "min(720px, calc(100vw - 32px))",
-    maxHeight: "min(86vh, 1000px)",
+    width: "100%",
+    maxWidth: 720,
+    maxHeight: "86vh",
     backgroundColor: THEME.cardBg,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: THEME.line,
-    // separate internal scroll from the fixed overlay
     overflow: "hidden",
     boxShadow: "0 18px 50px rgba(0,0,0,.35)" as any,
     display: "flex",
@@ -213,7 +252,7 @@ const styles = StyleSheet.create({
   body: {
     padding: 14,
     gap: 12,
-    overflowY: "auto" as any, // so mobile & desktop can scroll content independently
+    overflowY: "auto" as any,
   },
   image: {
     width: "100%",
@@ -238,17 +277,22 @@ const styles = StyleSheet.create({
   chipTxt: { color: THEME.chipInk, fontWeight: "800", fontSize: 12 },
   bodyText: { color: "#111827", lineHeight: 20, fontSize: 14 },
 
-  // pills (for Link “Svar”)
-  pillBtn: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === "web" ? 8 : 10,
-    borderWidth: 1.5,
-    borderColor: "#cbd5e1",
-    backgroundColor: "#fff",
+  replyWrap: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.line,
+    padding: 14,
+    gap: 8,
+    backgroundColor: "#ffffff",
   },
-  primaryPill: {
+  replyLabel: { color: THEME.ink, fontWeight: "900" },
+  replyInput: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: THEME.line,
+    borderRadius: 12,
+    padding: 10,
+    color: THEME.ink,
     backgroundColor: "#fff",
+    outlineStyle: "none",
   },
-  pillText: { fontSize: 14, fontWeight: "800" },
 });
