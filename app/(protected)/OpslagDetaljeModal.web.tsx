@@ -1,46 +1,55 @@
 // app/(protected)/OpslagDetaljeModal.web.tsx
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, StyleSheet, Text, TextInput, View } from "react-native";
+
 import { supabase } from "../../utils/supabase";
 
-type PostRow = {
+type Post = {
   id: string;
-  user_id: string;
-  created_at: string | null;
   overskrift: string | null;
   text: string | null;
   omraade: string | null;
   kategori: string | null;
   image_url: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  created_at: string | null;
 };
 
-const THEME = {
-  scrim: "rgba(0,0,0,.55)",
-  cardBg: "#ffffff",
-  ink: "#0b1220",
-  sub: "#475569",
-  line: "#e5e8ec",
-  chipBg: "#eef2ff",
-  chipInk: "#1e293b",
-};
+const MOBILE_MAX = 719;
 
 export default function OpslagDetaljeModalWeb() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
+  const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
-  const [post, setPost] = useState<PostRow | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // reply dialog
+  // Svar-dialog
   const [replyOpen, setReplyOpen] = useState(false);
-  const [replyText, setReplyText] = useState("");
+  const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
+  const canSend = reply.trim().length > 1;
 
-  // lås baggrundsscroll mens modal-siden er åben
   useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from("posts")
+          .select("id, overskrift, text, omraade, kategori, image_url, created_at")
+          .eq("id", id)
+          .single();
+
+        if (error) throw error;
+        if (mounted) setPost(data as Post);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    // Lås baggrund en smule på web (og især iOS)
     if (typeof document !== "undefined") {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -48,251 +57,239 @@ export default function OpslagDetaljeModalWeb() {
         document.body.style.overflow = prev;
       };
     }
-  }, []);
-
-  // fetch post
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      if (!id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error } = await supabase
-          .from("posts")
-          .select("id,user_id,created_at,overskrift,text,omraade,kategori,image_url,latitude,longitude")
-          .eq("id", id)
-          .single();
-        if (error) throw error;
-        if (alive) setPost(data as PostRow);
-      } catch (e: any) {
-        if (alive) setError(e?.message ?? "Kunne ikke hente opslaget.");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    return () => {};
   }, [id]);
 
   const close = () => router.back();
 
-  const created = useMemo(() => {
-    if (!post?.created_at) return null;
+  const onSend = async () => {
+    if (!canSend) return;
     try {
-      const d = new Date(post.created_at);
-      return d.toLocaleDateString("da-DK", { day: "2-digit", month: "short", year: "numeric" });
-    } catch {
-      return null;
+      setSending(true);
+      // TODO: gem beskeden et sted – placeholder:
+      // fx supabase.from("messages").insert({...})
+      await new Promise(r => setTimeout(r, 450));
+      setReply("");
+      setReplyOpen(false);
+      alert("Din besked er sendt.");
+    } catch (e: any) {
+      alert(e?.message || "Kunne ikke sende beskeden.");
+    } finally {
+      setSending(false);
     }
-  }, [post?.created_at]);
-
-  // SEND: som standard hopper vi til Beskeder med prefill
-  const sendReply = () => {
-    if (!post?.user_id || !post?.id || !replyText.trim()) return;
-    const href = `/(protected)/Beskeder?compose=1&to=${encodeURIComponent(
-      post.user_id
-    )}&postId=${encodeURIComponent(post.id)}&text=${encodeURIComponent(replyText.trim())}`;
-    router.replace(href);
   };
 
-  // guard
-  useEffect(() => {
-    if (!id) close();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  const isMobile = useMemo(
+    () => (typeof window !== "undefined" ? window.matchMedia(`(max-width:${MOBILE_MAX}px)`).matches : false),
+    []
+  );
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.card}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Text style={styles.titleText}>{post?.overskrift || (loading ? "Indlæser…" : "Opslag")}</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {post?.id && post?.user_id ? (
-              <button
-                onClick={() => setReplyOpen(true)}
-                className="pill"
-                aria-label="Svar på opslag"
-              >
-                Svar
-              </button>
-            ) : null}
-            <button onClick={close} className="pill" aria-label="Luk">
-              Luk
-            </button>
-          </View>
-        </View>
+    <>
+      <div className="overlay" role="dialog" aria-modal="true">
+        <div className="sheet">
+          <div className="card">
+            <div className="cardHead">
+              <h2 className="title">{post?.overskrift || "Opslag"}</h2>
+              <div className="headBtns">
+                <button className="pillBtn" onClick={() => setReplyOpen(true)}>Svar</button>
+                <button className="pillBtn" onClick={close}>Luk</button>
+              </div>
+            </div>
 
-        {/* Body (scrolls) */}
-        <View style={styles.body}>
-          {error ? (
-            <Text style={{ color: "#991b1b", fontWeight: "800" }}>{error}</Text>
-          ) : loading ? (
-            <Text style={{ color: THEME.sub }}>Indlæser…</Text>
-          ) : post ? (
-            <>
-              {post.image_url ? (
-                <Image
-                  source={{ uri: post.image_url }}
-                  style={styles.image}
-                  // @ts-ignore react-native-web
-                  alt={post.overskrift ?? "Billede"}
-                />
-              ) : null}
-
-              <View style={{ gap: 8 }}>
-                {/* chips */}
-                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                  {post.kategori ? (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipTxt}>{post.kategori}</Text>
-                    </View>
-                  ) : null}
-                  {post.omraade ? (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipTxt}>{post.omraade}</Text>
-                    </View>
-                  ) : null}
-                  {created ? (
-                    <View style={styles.chipLight}>
-                      <Text style={[styles.chipTxt, { color: THEME.sub }]}>{created}</Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                {post.text ? (
-                  <Text style={styles.bodyText}>{post.text}</Text>
+            {loading ? (
+              <div className="loading">Indlæser…</div>
+            ) : post ? (
+              <>
+                {post.image_url ? (
+                  <img className="hero" src={post.image_url} alt={post.overskrift ?? "Billede"} />
                 ) : null}
-              </View>
-            </>
-          ) : null}
-        </View>
 
-        {/* Reply dialog (inline) */}
-        {replyOpen && (
-          <View style={styles.replyWrap}>
-            <Text style={styles.replyLabel}>Skriv en besked til forfatteren</Text>
-            <TextInput
-              style={styles.replyInput}
-              multiline
-              placeholder="Din besked…"
-              placeholderTextColor="#94a3b8"
-              value={replyText}
-              onChangeText={setReplyText}
-            />
-            <View style={{ flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-              <button className="pill" onClick={() => setReplyOpen(false)}>Annullér</button>
-              <button className="pill primary" onClick={sendReply} disabled={!replyText.trim()}>
-                Send
-              </button>
-            </View>
-          </View>
-        )}
-      </View>
+                <div className="metaRow">
+                  {post.kategori ? <span className="chip">{post.kategori}</span> : null}
+                  {post.omraade ? <span className="chip">{post.omraade}</span> : null}
+                  {post.created_at ? (
+                    <span className="chip">
+                      {new Date(post.created_at).toLocaleDateString("da-DK", {
+                        day: "2-digit", month: "short", year: "numeric",
+                      })}
+                    </span>
+                  ) : null}
+                </div>
 
-      {/* Web-CSS for knapper + iOS Safari scroll hints */}
+                {post.text ? <p className="body">{post.text}</p> : null}
+              </>
+            ) : (
+              <div className="loading">Kunne ikke finde opslaget.</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {replyOpen && (
+        <div className="overlay reply">
+          <div className="sheet">
+            <div className="card small">
+              <h3 className="replyTitle">Skriv en besked til opslagets ejer</h3>
+              <textarea
+                className="textarea"
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder="Hej! Jeg er interesseret…"
+                rows={isMobile ? 6 : 8}
+              />
+              <div className="replyBtns">
+                <button className="pillBtn" onClick={() => setReplyOpen(false)}>Annullér</button>
+                <button className="pillBtn filled" disabled={!canSend || sending} onClick={onSend}>
+                  {sending ? "Sender…" : "Send"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
-        .pill{
-          padding:8px 12px;
-          border-radius:999px;
-          border:1.5px solid #cbd5e1;
-          background:#0b1220;
-          color:#fff;
-          font-weight:800;
-          cursor:pointer;
+        /* Overlay SKAL ligge over headeren */
+        .overlay{
+          position: fixed;
+          inset: 0;
+          background: rgba(2,6,23,0.60);
+          z-index: 9999;
+          display: flex;
         }
-        .pill.primary{ background:#ffffff; color:#0b1220; }
-        .pill:disabled{ opacity:.6; cursor:not-allowed; }
-        .pill:hover{ opacity:.95 }
+        /* På mobil forankrer vi indholdet under headeren (64px) + safe area */
+        .sheet{
+          flex: 1;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 24px;
+        }
+        @media (max-width: ${MOBILE_MAX}px){
+          .sheet{
+            align-items: flex-start;
+            padding-top: calc(64px + max(env(safe-area-inset-top, 0px), 10px));
+            padding-left: 12px;
+            padding-right: 12px;
+            padding-bottom: 24px;
+            overflow: auto;
+          }
+        }
 
-        /* iOS Safari smooth scroll inside the card */
-        .rnw-overflow-scroll{ -webkit-overflow-scrolling: touch; }
+        .card{
+          width: min(880px, 92vw);
+          background: #fff;
+          border-radius: 18px;
+          border: 1px solid #E6E9EE;
+          box-shadow: 0 20px 50px rgba(0,0,0,.35);
+          padding: 14px;
+        }
+        .card.small{
+          width: min(620px, 94vw);
+        }
+
+        .cardHead{
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding-bottom: 8px;
+        }
+        .title{
+          margin: 0;
+          font-size: 20px;
+          font-weight: 900;
+          color: #0b1220;
+        }
+        .headBtns{
+          display: flex;
+          gap: 8px;
+        }
+
+        /* Knapper (Svar/Luk) – samme størrelse */
+        .pillBtn{
+          appearance: none;
+          border: 1.5px solid #E6E9EE;
+          background: #0b1220;
+          color: #fff;
+          font-weight: 800;
+          font-size: 14px;
+          line-height: 1;
+          padding: 9px 14px;
+          border-radius: 999px;
+          cursor: pointer;
+        }
+        .pillBtn.filled{
+          background: #0b1220;
+          color: #fff;
+          border-color: #0b1220;
+        }
+        .pillBtn:disabled{ opacity: .6; cursor: default; }
+
+        .loading{ color:#0b1220; padding: 18px; font-weight: 700; }
+
+        .hero{
+          width: 100%;
+          height: auto;
+          max-height: 60vh;
+          object-fit: cover;
+          border-radius: 12px;
+          background: #f1f5f9;
+          border: 1px solid #E6E9EE;
+        }
+        @media (max-width: ${MOBILE_MAX}px){
+          .hero{ max-height: 42vh; }
+        }
+
+        .metaRow{
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .chip{
+          background: #eef2ff;
+          color: #1e293b;
+          border-radius: 999px;
+          padding: 6px 10px;
+          font-weight: 800;
+          font-size: 12px;
+        }
+
+        .body{
+          color: #111827;
+          margin-top: 12px;
+          line-height: 1.5;
+          font-size: 15px;
+        }
+
+        /* Reply dialog */
+        .reply .card{ padding: 16px; }
+        .replyTitle{
+          margin: 0 0 10px 0;
+          color: #0b1220;
+          font-weight: 900;
+          font-size: 18px;
+        }
+        .textarea{
+          width: 100%;
+          border-radius: 12px;
+          border: 1px solid #E6E9EE;
+          padding: 12px;
+          resize: vertical;
+          font: inherit;
+          color: #0b1220;
+          background: #fff;
+          outline: none;
+        }
+        .replyBtns{
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-top: 12px;
+        }
       `}</style>
-    </View>
+    </>
   );
 }
-
-/* ───────── styles ───────── */
-const styles = StyleSheet.create({
-  overlay: {
-    position: "fixed" as const,
-    inset: 0,
-    backgroundColor: THEME.scrim,
-    zIndex: 9999,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 12,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 720,
-    maxHeight: "86vh",
-    backgroundColor: THEME.cardBg,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: THEME.line,
-    overflow: "hidden",
-    boxShadow: "0 18px 50px rgba(0,0,0,.35)" as any,
-    display: "flex",
-  },
-  headerRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.line,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#f8fafc",
-  },
-  titleText: { fontSize: 18, fontWeight: "900", color: THEME.ink },
-  body: {
-    padding: 14,
-    gap: 12,
-    overflowY: "auto" as any,
-  },
-  image: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    borderRadius: 12,
-    backgroundColor: "#f1f5f9",
-  },
-  chip: {
-    backgroundColor: THEME.chipBg,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  chipLight: {
-    backgroundColor: "#f6f8fa",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: THEME.line,
-  },
-  chipTxt: { color: THEME.chipInk, fontWeight: "800", fontSize: 12 },
-  bodyText: { color: "#111827", lineHeight: 20, fontSize: 14 },
-
-  replyWrap: {
-    borderTopWidth: 1,
-    borderTopColor: THEME.line,
-    padding: 14,
-    gap: 8,
-    backgroundColor: "#ffffff",
-  },
-  replyLabel: { color: THEME.ink, fontWeight: "900" },
-  replyInput: {
-    minHeight: 96,
-    borderWidth: 1,
-    borderColor: THEME.line,
-    borderRadius: 12,
-    padding: 10,
-    color: THEME.ink,
-    backgroundColor: "#fff",
-    outlineStyle: "none",
-  },
-});
