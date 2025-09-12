@@ -14,6 +14,7 @@ type Post = {
 };
 
 const MOBILE_MAX = 719;
+const HEADER_H = 64;
 
 export default function OpslagDetaljeModalWeb() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,7 +48,7 @@ export default function OpslagDetaljeModalWeb() {
       }
     })();
 
-    // lock background scrolling
+    // lås baggrundsrul
     if (typeof document !== "undefined") {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -66,7 +67,7 @@ export default function OpslagDetaljeModalWeb() {
     if (!canSend) return;
     try {
       setSending(true);
-      // TODO: Save message in Supabase
+      // TODO: gem besked i Supabase
       await new Promise(r => setTimeout(r, 450));
       setReply(""); setReplyOpen(false);
       alert("Din besked er sendt.");
@@ -103,7 +104,9 @@ export default function OpslagDetaljeModalWeb() {
                   {post.omraade ? <span className="chip">{post.omraade}</span> : null}
                   {post.created_at ? (
                     <span className="chip">
-                      {new Date(post.created_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short", year: "numeric" })}
+                      {new Date(post.created_at).toLocaleDateString("da-DK", {
+                        day: "2-digit", month: "short", year: "numeric"
+                      })}
                     </span>
                   ) : null}
                 </div>
@@ -141,22 +144,22 @@ export default function OpslagDetaljeModalWeb() {
       )}
 
       <style>{`
-        /* Predictable sizing */
+        /* Forudsigelig sizing og ingen overflow-issues fra textarea */
         .overlay, .overlay * { box-sizing: border-box; }
 
-        /* Always above header; use dynamic viewport on iOS */
+        /* Ligger OVER headeren og fylder hele det visuelle viewport (iOS: 100dvh) */
         .overlay{
           position: fixed;
           inset: 0;
           height: 100dvh;
           min-height: 100dvh;
           background: rgba(2,6,23,0.60);
-          z-index: 100000; /* above WebHeader */
+          z-index: 100000;
           display: flex;
-          overscroll-behavior: contain;
           pointer-events: auto;
         }
 
+        /* DESKTOP: centreret ark med scroll i arket */
         .sheet{
           flex: 1;
           display: flex;
@@ -166,7 +169,6 @@ export default function OpslagDetaljeModalWeb() {
           overflow: auto;
           -webkit-overflow-scrolling: touch;
         }
-
         .card{
           width: min(880px, 92vw);
           background: #fff;
@@ -178,25 +180,28 @@ export default function OpslagDetaljeModalWeb() {
           overflow: auto;
         }
 
-        /* 🔥 RADIKALT MOBIL-FIX:
-           gør selve kortet fixed og forankr det under headeren,
-           så det ALDRIG havner “under” den grå overlay på iOS. */
+        /* 🔁 MOBIL: gør modal til en fuldskærms-side under headeren.
+           Ingen fixed/transform på kortet = iOS Safari kan ikke “gemme” det. */
         @media (max-width: ${MOBILE_MAX}px){
           .sheet{
-            align-items: center;
-            justify-content: center;
-            padding: 0;       /* styres af card nedenfor */
-            overflow: visible;
-          }
-          .card{
-            position: fixed;
-            left: 50%;
-            transform: translateX(-50%);
-            top: calc(64px + env(safe-area-inset-top, 0px) + 12px);
-            width: min(640px, 94vw);
-            max-height: calc(100dvh - (64px + env(safe-area-inset-top, 0px) + 24px));
+            justify-content: flex-start;
+            align-items: stretch;
+            padding: 0;
             overflow: auto;
           }
+          .card{
+            width: 100vw;
+            max-width: 100vw;
+            margin: 12px;              /* lidt luft i siderne */
+            margin-top: calc(${HEADER_H}px + env(safe-area-inset-top, 0px) + 12px);
+            border-radius: 18px;
+            border: 1px solid #E6E9EE;
+            box-shadow: 0 12px 30px rgba(0,0,0,.30);
+            max-height: none;          /* lad hele siden scrolle */
+            overflow: visible;
+          }
+          /* Sørg for at hele overlay kan scrolle, hvis indholdet er langt */
+          .overlay{ overflow: auto; -webkit-overflow-scrolling: touch; }
         }
 
         .card.small{
@@ -214,6 +219,7 @@ export default function OpslagDetaljeModalWeb() {
         .title{ margin: 0; font-size: 20px; font-weight: 900; color: #0b1220; }
         .headBtns{ display: flex; gap: 8px; }
 
+        /* Svar/Luk knapper – samme punktstørrelse */
         .pillBtn{
           appearance: none;
           border: 1.5px solid #E6E9EE;
@@ -241,7 +247,7 @@ export default function OpslagDetaljeModalWeb() {
           border: 1px solid #E6E9EE;
         }
         @media (max-width: ${MOBILE_MAX}px){
-          .hero{ max-height: 42vh; }
+          .hero{ max-height: 38vh; }
         }
 
         .metaRow{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
