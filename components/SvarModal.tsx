@@ -1,3 +1,4 @@
+// components/SvarModal.tsx
 import React, { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
