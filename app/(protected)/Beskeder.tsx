@@ -1,11 +1,5 @@
-import React from "react";
-import WebPage from "../../components/WebPage";
-import BeskederScreen from "../Beskeder";
+// Platform-fallback til Expo Router, så .web.tsx bruges i web-builds
+import WebScreen from "./Beskeder.web";
 
-export default function BeskederWeb() {
-  return (
-    <WebPage title="Beskeder" description="Dine beskeder på Liguster.">
-      <BeskederScreen />
-    </WebPage>
-  );
-}
+export default WebScreen;
+export const options = { headerShown: false };

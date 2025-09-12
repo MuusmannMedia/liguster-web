@@ -2,7 +2,7 @@
   "expo": {
     "name": "Liguster",
     "slug": "liguster-app",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ligusterapp",
@@ -10,7 +10,7 @@
     "newArchEnabled": false,
 
     "ios": {
-      "buildNumber": "2",
+      "buildNumber": "3",
       "supportsTablet": true,
       "bundleIdentifier": "dk.liguster.app",
       "infoPlist": {
@@ -24,6 +24,7 @@
 
     "android": {
       "package": "dk.liguster.app",
+      "versionCode": 3,
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -39,9 +40,7 @@
         {
           "action": "VIEW",
           "autoVerify": false,
-          "data": [
-            { "scheme": "ligusterapp" }
-          ],
+          "data": [{ "scheme": "ligusterapp" }],
           "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
@@ -94,7 +93,10 @@
       "privacyUrl": "https://www.liguster-app.dk/privacy"
     },
 
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+
     "updates": {
       "url": "https://u.expo.dev/510eb874-f1b3-4c29-9c58-4d19f0dd6272"
     }
