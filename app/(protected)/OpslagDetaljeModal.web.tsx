@@ -3,9 +3,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../utils/supabase";
 
-/* ---------- Hjælpere ---------- */
+/* ---------- helpers ---------- */
 function uuid() {
-  // Robust v4 UUID – virker også hvis crypto.randomUUID ikke findes
   if (typeof crypto !== "undefined" && (crypto as any).randomUUID) {
     return (crypto as any).randomUUID();
   }
@@ -16,10 +15,10 @@ function uuid() {
   });
 }
 
-/* ---------- Typer ---------- */
+/* ---------- types ---------- */
 type Post = {
   id: string;
-  user_id: string; // ejer af opslaget (modtager)
+  user_id: string; // owner (receiver)
   overskrift: string | null;
   text: string | null;
   omraade: string | null;
@@ -37,14 +36,13 @@ export default function OpslagDetaljeModalWeb() {
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // reply dialog
   const [replyOpen, setReplyOpen] = useState(false);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
 
   const [meId, setMeId] = useState<string | null>(null);
 
-  /* Hent nuværende bruger (afsender) */
+  // current user (sender)
   useEffect(() => {
     (async () => {
       try {
@@ -56,7 +54,7 @@ export default function OpslagDetaljeModalWeb() {
     })();
   }, []);
 
-  /* Hent opslaget (inkl. user_id) og lås baggrundsrulning */
+  // fetch post + lock body scroll
   useEffect(() => {
     let mounted = true;
 
@@ -77,7 +75,6 @@ export default function OpslagDetaljeModalWeb() {
       }
     })();
 
-    // Lås body-scroll (især iOS)
     if (typeof document !== "undefined") {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
@@ -100,14 +97,25 @@ export default function OpslagDetaljeModalWeb() {
 
   const canSend = reply.trim().length > 1 && !!meId && !!post?.user_id;
 
-  /* SEND: indsæt i messages, luk modal, og navigér stabilt til Beskeder */
+  const goToBeskeder = () => {
+    // ensure body is released before navigation
+    if (typeof document !== "undefined") document.body.style.overflow = "";
+    try {
+      router.replace("/(protected)/Beskeder");
+    } catch {
+      if (typeof window !== "undefined") {
+        window.location.assign("/(protected)/Beskeder");
+      }
+    }
+  };
+
   const onSend = async () => {
     if (!canSend || !post || !meId) return;
     try {
       setSending(true);
 
       const payload = {
-        thread_id: uuid(),       // ny tråd-id
+        thread_id: uuid(),
         sender_id: meId,
         receiver_id: post.user_id,
         post_id: post.id,
@@ -120,19 +128,9 @@ export default function OpslagDetaljeModalWeb() {
       setReply("");
       setReplyOpen(false);
 
-      // Luk modal først (frigiver body-tilstand)
-      close();
-
-      // Navigér i næste tick — undgår “blank side” på web
-      setTimeout(() => {
-        try {
-          router.push("/(protected)/Beskeder");
-        } catch {
-          if (typeof window !== "undefined") {
-            window.location.assign("/(protected)/Beskeder");
-          }
-        }
-      }, 0);
+      // single-step, stable redirect → avoids blank pages
+      // schedule to next task so the modal fully unmounts first
+      setTimeout(goToBeskeder, 0);
     } catch (e: any) {
       console.error("Send message failed:", e);
       alert(e?.message || "Kunne ikke sende beskeden.");
@@ -149,12 +147,8 @@ export default function OpslagDetaljeModalWeb() {
             <div className="cardHead">
               <h2 className="title">{post?.overskrift || "Opslag"}</h2>
               <div className="headBtns">
-                <button className="pillBtn" onClick={() => setReplyOpen(true)}>
-                  Svar
-                </button>
-                <button className="pillBtn" onClick={close}>
-                  Luk
-                </button>
+                <button className="pillBtn" onClick={() => setReplyOpen(true)}>Svar</button>
+                <button className="pillBtn" onClick={close}>Luk</button>
               </div>
             </div>
 
@@ -163,11 +157,7 @@ export default function OpslagDetaljeModalWeb() {
             ) : post ? (
               <>
                 {post.image_url ? (
-                  <img
-                    className="hero"
-                    src={post.image_url}
-                    alt={post.overskrift ?? "Billede"}
-                  />
+                  <img className="hero" src={post.image_url} alt={post.overskrift ?? "Billede"} />
                 ) : null}
 
                 <div className="metaRow">
@@ -176,9 +166,7 @@ export default function OpslagDetaljeModalWeb() {
                   {post.created_at ? (
                     <span className="chip">
                       {new Date(post.created_at).toLocaleDateString("da-DK", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
+                        day: "2-digit", month: "short", year: "numeric",
                       })}
                     </span>
                   ) : null}
@@ -206,14 +194,8 @@ export default function OpslagDetaljeModalWeb() {
                 rows={isMobile ? 6 : 8}
               />
               <div className="replyBtns">
-                <button className="pillBtn" onClick={() => setReplyOpen(false)}>
-                  Annullér
-                </button>
-                <button
-                  className="pillBtn filled"
-                  disabled={!canSend || sending}
-                  onClick={onSend}
-                >
+                <button className="pillBtn" onClick={() => setReplyOpen(false)}>Annullér</button>
+                <button className="pillBtn filled" disabled={!canSend || sending} onClick={onSend}>
                   {sending ? "Sender…" : "Send"}
                 </button>
               </div>
@@ -223,10 +205,8 @@ export default function OpslagDetaljeModalWeb() {
       )}
 
       <style>{`
-        /* Forudsigelig sizing */
         .overlay, .overlay * { box-sizing: border-box; }
 
-        /* Ligger over headeren, bruger 100dvh så iOS ikke klipper */
         .overlay{
           position: fixed;
           inset: 0;
@@ -285,7 +265,6 @@ export default function OpslagDetaljeModalWeb() {
         }
         .headBtns{ display: flex; gap: 8px; }
 
-        /* Knapper (Svar/Luk/Send/Annullér) */
         .pillBtn{
           appearance: none;
           border: 1.5px solid #E6E9EE;
@@ -312,58 +291,24 @@ export default function OpslagDetaljeModalWeb() {
           background: #f1f5f9;
           border: 1px solid #E6E9EE;
         }
-        @media (max-width: ${MOBILE_MAX}px){
-          .hero{ max-height: 42vh; }
-        }
+        @media (max-width: ${MOBILE_MAX}px){ .hero{ max-height: 42vh; } }
 
-        .metaRow{
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 10px;
-        }
+        .metaRow{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .chip{
-          background: #eef2ff;
-          color: #1e293b;
-          border-radius: 999px;
-          padding: 6px 10px;
-          font-weight: 800;
-          font-size: 12px;
+          background: #eef2ff; color: #1e293b; border-radius: 999px;
+          padding: 6px 10px; font-weight: 800; font-size: 12px;
         }
 
-        .body{
-          color: #111827;
-          margin-top: 12px;
-          line-height: 1.5;
-          font-size: 15px;
-        }
+        .body{ color:#111827; margin-top: 12px; line-height: 1.5; font-size: 15px; }
 
-        /* Reply dialog */
-        .replyTitle{
-          margin: 0 0 10px 0;
-          color: #0b1220;
-          font-weight: 900;
-          font-size: 18px;
-        }
+        .replyTitle{ margin: 0 0 10px 0; color:#0b1220; font-weight: 900; font-size: 18px; }
         .textarea{
-          width: 100%;
-          max-width: 100%;
-          border-radius: 12px;
-          border: 1px solid #E6E9EE;
-          padding: 12px;
-          resize: vertical;
-          font: inherit;
-          color: #0b1220;
-          background: #fff;
-          outline: none;
-          display: block;
+          width: 100%; max-width: 100%;
+          border-radius: 12px; border: 1px solid #E6E9EE;
+          padding: 12px; resize: vertical; font: inherit;
+          color: #0b1220; background: #fff; outline: none; display: block;
         }
-        .replyBtns{
-          display: flex;
-          gap: 10px;
-          justify-content: flex-end;
-          margin-top: 12px;
-        }
+        .replyBtns{ display: flex; gap: 10px; justify-content: flex-end; margin-top: 12px; }
       `}</style>
     </>
   );
