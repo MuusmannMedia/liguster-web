@@ -3,9 +3,23 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../utils/supabase";
 
+/* ---------- Hjælpere ---------- */
+function uuid() {
+  // Robust v4 UUID – virker også hvis crypto.randomUUID ikke findes
+  if (typeof crypto !== "undefined" && (crypto as any).randomUUID) {
+    return (crypto as any).randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/* ---------- Typer ---------- */
 type Post = {
   id: string;
-  user_id: string;             // <- ejer af opslaget (modtager)
+  user_id: string; // ejer af opslaget (modtager)
   overskrift: string | null;
   text: string | null;
   omraade: string | null;
@@ -30,17 +44,22 @@ export default function OpslagDetaljeModalWeb() {
 
   const [meId, setMeId] = useState<string | null>(null);
 
-  // fetch current user id (sender)
+  /* Hent nuværende bruger (afsender) */
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getUser();
-      setMeId(data.user?.id ?? null);
+      try {
+        const { data } = await supabase.auth.getUser();
+        setMeId(data.user?.id ?? null);
+      } catch {
+        setMeId(null);
+      }
     })();
   }, []);
 
-  // fetch post (incl. user_id as receiver)
+  /* Hent opslaget (inkl. user_id) og lås baggrundsrulning */
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
         setLoading(true);
@@ -49,7 +68,6 @@ export default function OpslagDetaljeModalWeb() {
           .select("id, user_id, overskrift, text, omraade, kategori, image_url, created_at")
           .eq("id", id)
           .single();
-
         if (error) throw error;
         if (mounted) setPost(data as Post);
       } catch (e) {
@@ -59,12 +77,12 @@ export default function OpslagDetaljeModalWeb() {
       }
     })();
 
-    // lås baggrundsrulning (især iOS)
+    // Lås body-scroll (især iOS)
     if (typeof document !== "undefined") {
-      const prev = document.body.style.overflow;
+      const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
-        document.body.style.overflow = prev;
+        document.body.style.overflow = prevOverflow;
       };
     }
     return () => {};
@@ -82,16 +100,16 @@ export default function OpslagDetaljeModalWeb() {
 
   const canSend = reply.trim().length > 1 && !!meId && !!post?.user_id;
 
+  /* SEND: indsæt i messages, luk modal, og navigér stabilt til Beskeder */
   const onSend = async () => {
     if (!canSend || !post || !meId) return;
     try {
       setSending(true);
 
-      // map til dit messages-schema
       const payload = {
-        thread_id: crypto.randomUUID(), // ny tråd hver gang (enkelt og robust)
+        thread_id: uuid(),       // ny tråd-id
         sender_id: meId,
-        receiver_id: post.user_id,      // ejer af opslaget
+        receiver_id: post.user_id,
         post_id: post.id,
         text: reply.trim(),
       };
@@ -102,9 +120,21 @@ export default function OpslagDetaljeModalWeb() {
       setReply("");
       setReplyOpen(false);
 
-      // send brugeren til Beskeder så de kan se tråden
-      router.replace("/(protected)/Beskeder");
+      // Luk modal først (frigiver body-tilstand)
+      close();
+
+      // Navigér i næste tick — undgår “blank side” på web
+      setTimeout(() => {
+        try {
+          router.push("/(protected)/Beskeder");
+        } catch {
+          if (typeof window !== "undefined") {
+            window.location.assign("/(protected)/Beskeder");
+          }
+        }
+      }, 0);
     } catch (e: any) {
+      console.error("Send message failed:", e);
       alert(e?.message || "Kunne ikke sende beskeden.");
     } finally {
       setSending(false);
@@ -141,12 +171,8 @@ export default function OpslagDetaljeModalWeb() {
                 ) : null}
 
                 <div className="metaRow">
-                  {post.kategori ? (
-                    <span className="chip">{post.kategori}</span>
-                  ) : null}
-                  {post.omraade ? (
-                    <span className="chip">{post.omraade}</span>
-                  ) : null}
+                  {post.kategori ? <span className="chip">{post.kategori}</span> : null}
+                  {post.omraade ? <span className="chip">{post.omraade}</span> : null}
                   {post.created_at ? (
                     <span className="chip">
                       {new Date(post.created_at).toLocaleDateString("da-DK", {
@@ -177,7 +203,6 @@ export default function OpslagDetaljeModalWeb() {
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 placeholder="Hej! Jeg er interesseret…"
-                // lidt lavere højde på mobil
                 rows={isMobile ? 6 : 8}
               />
               <div className="replyBtns">
@@ -198,10 +223,10 @@ export default function OpslagDetaljeModalWeb() {
       )}
 
       <style>{`
-        /* Forudsigelig sizing så textarea ikke løber ud over kortet */
+        /* Forudsigelig sizing */
         .overlay, .overlay * { box-sizing: border-box; }
 
-        /* Ligger over headeren og bruger 100dvh så iOS ikke klipper */
+        /* Ligger over headeren, bruger 100dvh så iOS ikke klipper */
         .overlay{
           position: fixed;
           inset: 0;
@@ -224,7 +249,7 @@ export default function OpslagDetaljeModalWeb() {
         }
         @media (max-width: ${MOBILE_MAX}px){
           .sheet{
-            align-items: flex-start; /* start under headeren */
+            align-items: flex-start;
             padding-top: calc(64px + max(env(safe-area-inset-top, 0px), 10px));
             padding-left: 12px;
             padding-right: 12px;
@@ -260,7 +285,7 @@ export default function OpslagDetaljeModalWeb() {
         }
         .headBtns{ display: flex; gap: 8px; }
 
-        /* Enhedligt knapdesign (Svar/Luk/Send/Annullér) */
+        /* Knapper (Svar/Luk/Send/Annullér) */
         .pillBtn{
           appearance: none;
           border: 1.5px solid #E6E9EE;
