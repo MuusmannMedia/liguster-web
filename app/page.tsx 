@@ -1,0 +1,15 @@
+export default function Landing() {
+  return (
+    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24 }}>
+      <div>
+        <h1 style={{ marginBottom: 8 }}>Nabolaget – samlet ét sted</h1>
+        <p style={{ color: '#cbd6e2', marginBottom: 24 }}>Liguster samler opslag, aktiviteter og foreningsliv i dit nabolag.</p>
+        <p>
+          <a href="/(public)/login" style={{ background: '#fff', color: '#171C22', padding: '10px 16px', borderRadius: 999, fontWeight: 700, textDecoration: 'none' }}>
+            Log ind
+          </a>
+        </p>
+      </div>
+    </main>
+  );
+}

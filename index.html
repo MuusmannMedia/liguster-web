@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Liguster</title>
+    <style>
+      body{margin:0;background:#171C22;color:#fff;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+      main{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}
+      .card{max-width:640px}
+      a.btn{display:inline-block;background:#fff;color:#171C22;padding:10px 16px;border-radius:999px;font-weight:700;text-decoration:none}
+      p.muted{color:#cbd6e2}
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <h1>Nabolaget – samlet ét sted</h1>
+        <p class="muted">Liguster samler opslag, aktiviteter og foreningsliv i dit nabolag.</p>
+
+        <p style="margin-top:24px"><a class="btn" href="/reset">Test reset-broen</a></p>
+
+        <p style="margin-top:32px"><a href="/privacy" style="color:#cfe2ff">Privacy</a></p>
+        <p style="margin-top:16px;color:#8fa3b7;font-size:12px">© <span id="y"></span> Liguster</p>
+      </div>
+    </main>
+    <script>document.getElementById('y').textContent=new Date().getFullYear()</script>
+  </body>
+</html>

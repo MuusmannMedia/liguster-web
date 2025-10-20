@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Åbner Liguster…</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <style>
+      body{margin:0;background:#171C22;color:#fff;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+      main{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}
+      a.btn{display:inline-block;background:#fff;color:#171C22;padding:10px 16px;border-radius:999px;font-weight:700;text-decoration:none}
+      p.muted{color:#cbd6e2}
+      code{color:#cfe2ff}
+    </style>
+    <script>
+      // Laver ?query af tokens der evt. ligger i #hash (Supabase) eller ?query.
+      function queryFromLocation() {
+        var raw = "";
+        if (location.hash && location.hash.length > 1) raw = location.hash.slice(1);
+        else if (location.search && location.search.length > 1) raw = location.search.slice(1);
+        return raw ? ("?" + raw) : "";
+      }
+      function deepLinkUrl() {
+        // MATCHER din mobilrute: app/auth/reset.tsx
+        return "liguster://auth/reset" + queryFromLocation();
+      }
+      function openApp() {
+        var deep = deepLinkUrl();
+        // Brug replace så back-knap ikke sender brugeren tilbage hertil
+        location.replace(deep);
+        // Retry efter ~600ms (nogle iOS-webviews ignorerer første hop)
+        setTimeout(function(){ location.replace(deep); }, 600);
+      }
+      document.addEventListener("DOMContentLoaded", function(){
+        setTimeout(openApp, 200);
+        var link = document.getElementById("fallback");
+        link.addEventListener("click", function(e){ e.preventDefault(); openApp(); });
+        document.getElementById("deep").textContent = deepLinkUrl();
+      });
+    </script>
+  </head>
+  <body>
+    <main>
+      <div>
+        <h1>Åbner Liguster…</h1>
+        <p class="muted">Hvis intet sker, kan du åbne appen manuelt herunder.</p>
+        <p style="margin-top:12px">
+          <a id="fallback" href="#" class="btn">Åbn i appen</a>
+        </p>
+        <p style="margin-top:14px;font-size:12px;color:#8fa3b7">
+          Sender til: <code id="deep"></code>
+        </p>
+      </div>
+    </main>
+  </body>
+</html>
